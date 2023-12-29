@@ -1,0 +1,47 @@
+#version 460
+
+struct Node{
+    uint something;
+};
+
+struct AABB{
+    vec3 min;
+    vec3 max;
+};
+
+struct Batch{
+    AABB box;
+    uint pointOffset;
+    uint pointCount;
+};
+
+layout(set = 0, binding = 0) uniform Camera{
+    mat4 view;
+    mat4 projection;
+    vec3 direction;
+    vec3 position;
+    uvec2 resolution;
+}camera;
+
+layout(set = 0, binding = 1) uniform DynamicConst{
+    uint workerCount;
+};
+
+layout(set = 1, binding = 0) readonly buffer AccelerationStructure{
+    Node nodes[];
+}accelerationStructure;
+
+layout(set = 2, binding = 0) readonly buffer Batches{
+    Batch batches[];  
+};
+
+layout(set = 2, binding = 1) readonly buffer BatchList{
+    uint batchCount;
+    uint batchList[];
+};
+
+layout(local_size_x = 128) in;
+
+void main(){
+    // TODO
+}
