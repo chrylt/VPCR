@@ -5,7 +5,7 @@
 TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const std::string_view scenePath)
     : backend_(tgai)
 {
-    // TODO @Atzubi
+    // TODO: @Atzubi
 
     const auto batches = LoadScene(scenePath);
     batchCount_ = static_cast<std::uint32_t>(batches.size());

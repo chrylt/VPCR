@@ -67,7 +67,6 @@ void main(){
                     (-projected.w <= projected.y) && (projected.y <= projected.w) &&
                     (0.f <= projected.z) && (projected.z <= projected.w)){
                 vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
-                while(coords.x >= 1000 || coords.y >= 1000);
                 imageStore(renderTarget, ivec2(coords), unpackUnorm4x8(points[k].rgba));
             }
         }

@@ -43,5 +43,5 @@ layout(set = 2, binding = 1) readonly buffer BatchList{
 layout(local_size_x = 128) in;
 
 void main(){
-    // TODO
+    // TODO: @Atzubi
 }
