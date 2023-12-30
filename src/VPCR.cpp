@@ -268,15 +268,16 @@ void VPCRImpl::CreateClearPass()
         // Use utility function to load Shader from File
         const auto computeShader = tga::loadShader("../shaders/clear_comp.spv", tga::ShaderType::compute, backend_);
 
-        const tga::InputLayout inputLayout({// Set = 0: Camera
-                                            {{{tga::BindingType::uniformBuffer}}},
+        const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
+                                            {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
                                             // Set = 1: RenderTarget
                                             {{{tga::BindingType::storageImage}}}});
 
         const tga::ComputePassInfo passInfo(computeShader, inputLayout);
         clearPass = std::make_unique<TGAComputePass>(backend_, passInfo);
 
-        clearPass->BindInput(camera_->GetBuffer(), 0);
+        clearPass->BindInput(camera_->GetBuffer(), 0, 0);
+        clearPass->BindInput(dynamicConst_, 0, 1);
         clearPass->BindInput(pipeline.renderTarget, 1);
     }
 }

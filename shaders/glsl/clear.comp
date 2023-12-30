@@ -8,6 +8,10 @@ layout(set = 0, binding = 0) uniform Camera{
     uvec2 resolution;
 }camera;
 
+layout(set = 0, binding = 1) uniform DynamicConst{
+    uint workerCount;
+};
+
 layout(set = 1, binding = 0) writeonly uniform image2D renderTarget;
 
 layout(local_size_x = 128) in;

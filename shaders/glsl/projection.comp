@@ -62,11 +62,11 @@ void main(){
     for (uint i = workOffset; i < workOffset + workAmount; ++i){
         const Batch batch = batches[batchList[i]];
         for (uint k = batch.pointOffset; k < batch.pointOffset + batch.pointCount; ++k){
-            vec4 projected = camera.projection * camera.view * vec4(points[k].position, 1);
+            const vec4 projected = camera.projection * camera.view * vec4(points[k].position, 1);
             if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
                     (-projected.w <= projected.y) && (projected.y <= projected.w) &&
                     (0.f <= projected.z) && (projected.z <= projected.w)){
-                vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
+                const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
                 imageStore(renderTarget, ivec2(coords), unpackUnorm4x8(points[k].rgba));
             }
         }
