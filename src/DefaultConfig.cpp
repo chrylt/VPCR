@@ -1,5 +1,7 @@
 #include "DefaultConfig.h"
 
+#include <vector>
+
 #include "Config.h"
 
 Config GetDefaultConfig()

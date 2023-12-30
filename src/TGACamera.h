@@ -17,7 +17,7 @@ public:
     TGACamera(tga::Interface& tgai, std::uint32_t resX, std::uint32_t resY, glm::vec3 position = glm::vec3(0),
               float jaw = 0, float pitch = 0, glm::vec3 up = glm::vec3(0.f, 1.f, 0.f));
 
-    void Update(glm::vec3 position, float jaw, float pitch, bool doRotation = false);
+    void Update(glm::vec3 position, float jaw, float pitch);
 
     tga::CommandRecorder& Upload(tga::CommandRecorder& recorder) const;
 

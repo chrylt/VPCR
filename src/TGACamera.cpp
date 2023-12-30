@@ -17,7 +17,7 @@ TGACamera::TGACamera(tga::Interface& tgai, const std::uint32_t resX, const std::
     const tga::Binding cameraBinding(buffer_);
 }
 
-void TGACamera::Update(const glm::vec3 position, const float jaw, const float pitch, const bool doRotation)
+void TGACamera::Update(const glm::vec3 position, const float jaw, const float pitch)
 {
     position_ = position;
     jaw_ = jaw;

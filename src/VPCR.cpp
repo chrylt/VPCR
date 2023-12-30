@@ -58,8 +58,8 @@ private:
 
     tga::Window window_;
 
-    std::chrono::steady_clock::time_point lastFrameTimeStamp_;
-    std::chrono::steady_clock::time_point lastTitleUpdate_;
+    std::chrono::time_point<std::chrono::high_resolution_clock> lastFrameTimeStamp_;
+    std::chrono::time_point<std::chrono::high_resolution_clock> lastTitleUpdate_;
     std::uint32_t frameCounter_ = 0;
 
     std::optional<UserInputCache> userInputCache_;
@@ -133,7 +133,7 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
         if ((currentTime - lastTitleUpdate_).count() / 1000000000.f >= 1.f) {
             lastTitleUpdate_ = std::chrono::high_resolution_clock::now();
 
-            backend_.setWindowTitle(window_, std::format("VPCR, Framerate: {} FPS", frameCounter_));
+            backend_.setWindowTitle(window_, "VPCR, Framerate: " + std::to_string(frameCounter_) + " FPS");
             frameCounter_ = 0;
         }
     }
