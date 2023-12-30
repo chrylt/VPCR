@@ -1,5 +1,7 @@
 #include "VPCR.h"
 
+#include <chrono>
+
 #include "TGACamera.h"
 #include "TGAGpuPass.h"
 #include "TGAPointCloudAcceleration.h"
