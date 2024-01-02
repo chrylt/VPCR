@@ -6,8 +6,8 @@ struct Point{
 };
 
 struct AABB{
-    vec3 min;
-    vec3 max;
+    vec3 minV;
+    vec3 maxV;
 };
 
 struct Batch{
