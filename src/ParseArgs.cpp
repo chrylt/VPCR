@@ -11,9 +11,9 @@ Config ParseArgs(int argc, char **argv)
     CLI::App app{"Engine.exe"};
 
     app.add_option_function<std::string>(
-           "--scene_directory", [&config](const std::string& path) { config.Set("scenePath", path); },
-           "Set the path to the scene directory.")
-        ->check(CLI::ExistingDirectory)
+           "--scene_file", [&config](const std::string& path) { config.Set("scenePath", path); },
+           "Set the path to the scene file.")
+        ->check(CLI::ExistingFile)
         ->type_name("PATH")
         ->required();
 
