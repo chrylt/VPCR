@@ -13,8 +13,8 @@ struct Point {
 };
 
 struct AABB {
-    alignas(16) glm::vec3 min;
-    alignas(16) glm::vec3 max;
+    alignas(16) glm::vec3 minV;
+    alignas(16) glm::vec3 maxV;
 };
 
 struct Batch {
