@@ -38,6 +38,7 @@ jobs:
     - name: Update Submodules
       run: |
         git pull origin ${{ env.REF_NAME }}
+        git checkout --force -B ${{ env.REF_NAME }} refs/remote/origin/${{ env.REF_NAME }}
         git submodule update --init --recursive
 
     - name: Configure CMake
