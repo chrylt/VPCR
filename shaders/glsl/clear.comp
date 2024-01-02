@@ -1,0 +1,27 @@
+#version 460
+
+layout(set = 0, binding = 0) uniform Camera{
+    mat4 view;
+    mat4 projection;
+    vec3 direction;
+    vec3 position;
+    uvec2 resolution;
+}camera;
+
+layout(set = 0, binding = 1) uniform DynamicConst{
+    uint workerCount;
+};
+
+layout(set = 1, binding = 0) writeonly uniform image2D renderTarget;
+
+layout(local_size_x = 128) in;
+
+void main()
+{
+    const ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+    if (id.x >= camera.resolution.x || id.y >= camera.resolution.y){
+        return;
+    }
+
+    imageStore(renderTarget, id, vec4(0));
+}

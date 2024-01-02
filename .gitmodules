@@ -1,0 +1,3 @@
+[submodule "external/TGA"]
+	path = external/TGA
+	url = https://github.com/Estard/TGA
