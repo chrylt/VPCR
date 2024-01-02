@@ -37,7 +37,7 @@ jobs:
   
     - name: Update Submodules
       run: |
-        git pull
+        git pull origin ${{ enf.REF_NAME }}
         git submodule update --init --recursive
 
     - name: Configure CMake
