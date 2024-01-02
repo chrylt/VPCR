@@ -1,4 +1,5 @@
 #version 460
+#extension GL_KHR_vulkan_glsl : enable
 
 layout(set = 0, binding = 0) uniform Camera{
     mat4 view;
@@ -12,7 +13,8 @@ layout(set = 0, binding = 1) uniform DynamicConst{
     uint workerCount;
 };
 
-layout(set = 1, binding = 0) writeonly uniform image2D renderTarget;
+layout(set = 1, binding = 0, r32ui) writeonly uniform uimage2D renderTarget;
+layout(set = 1, binding = 1, r32ui) writeonly uniform uimage2D depthBuffer;
 
 layout(local_size_x = 128) in;
 
@@ -23,5 +25,6 @@ void main()
         return;
     }
 
-    imageStore(renderTarget, id, vec4(0));
+    imageStore(renderTarget, id, ivec4(0));
+    imageStore(depthBuffer, id, ivec4(0));
 }

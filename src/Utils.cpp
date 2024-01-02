@@ -42,8 +42,8 @@ std::vector<Batch> LoadScene(const std::string_view scene)
                 break;
             }
 
-            box.min = glm::min(box.min, (*iterator).position);
-            box.max = glm::max(box.min, (*iterator).position);
+            box.minV = glm::min(box.minV, (*iterator).position);
+            box.maxV = glm::max(box.minV, (*iterator).position);
 
             batch.points.push_back(*iterator);
             ++iterator;

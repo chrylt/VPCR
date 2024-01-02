@@ -1,4 +1,6 @@
 #version 460
+#extension GL_ARB_gpu_shader_int64 : enable
+#extension GL_KHR_vulkan_glsl : enable
 
 struct Point{
     vec3 position;
@@ -28,7 +30,8 @@ layout(set = 0, binding = 1) uniform DynamicConst{
     uint workerCount;
 };
 
-layout(set = 1, binding = 0) writeonly uniform image2D renderTarget;
+layout(set = 1, binding = 0, r32ui) uniform uimage2D renderTarget;
+layout(set = 1, binding = 1, r32ui) uniform uimage2D depthBuffer;
 
 layout(set = 2, binding = 0) readonly buffer Points{
     Point points[];
@@ -62,12 +65,25 @@ void main(){
     for (uint i = workOffset; i < workOffset + workAmount; ++i){
         const Batch batch = batches[batchList[i]];
         for (uint k = batch.pointOffset; k < batch.pointOffset + batch.pointCount; ++k){
+
             const vec4 projected = camera.projection * camera.view * vec4(points[k].position, 1);
+
             if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
                     (-projected.w <= projected.y) && (projected.y <= projected.w) &&
                     (0.f <= projected.z) && (projected.z <= projected.w)){
+                // projection is within window
                 const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
-                imageStore(renderTarget, ivec2(coords), unpackUnorm4x8(points[k].rgba));
+
+                // depth test via 64-bit-atomicMin
+                uint depth = uint(floatBitsToInt(projected.w)); // cast instead of floatBitsToUint to avoid problems with negative numbers
+
+                uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
+
+				if(depth < oldValue){
+					imageAtomicExchange(renderTarget, ivec2(coords), points[k].rgba);
+				}
+
+                imageStore(renderTarget, ivec2(coords), ivec4(points[k].rgba));
             }
         }
     }
