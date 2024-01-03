@@ -57,6 +57,10 @@ jobs:
       uses: actions/checkout@v4
       with:
        submodules: recursive
+    
+    - name: Setup Environment Windows
+      if: matrix.os == 'windows-latest'
+      uses: seanmiddleditch/gha-setup-vsdevenv@v4
   
     - name: Set reusable strings
       # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
@@ -76,6 +80,4 @@ jobs:
         -S ${{ github.workspace }}
     - name: Build
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
-      run: |
-        cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
-        $ENV:PATH="$ENV:PATH;$ENV:VULKAN_SDK/bin"
+      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
