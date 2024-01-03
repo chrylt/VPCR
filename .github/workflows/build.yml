@@ -45,11 +45,13 @@ jobs:
         sudo apt install libxcursor-dev
         sudo apt install libxi-dev
 
-    - name: Setup Vulkan
+    - name: Setup Vulkan Windows
       if: matrix.os == 'windows-latest'
       run: |
+        echo "Starting vulkan sdk download"
         Invoke-WebRequest -OutFile VulkanSDK.exe -Uri "https://sdk.lunarg.com/sdk/download/1.3.268.0/windows/VulkanSDK-1.3.268.0-Installer.exe"
-        Start-Process .\VulkanSDK.exe -Wait -PassThru -ArgumentList 'in', '-da', '-c'
+        echo "Starting vulkan sdk install"
+        .\VulkanSDK.exe in -da -c
          
     - name: Checkout
       uses: actions/checkout@v4
