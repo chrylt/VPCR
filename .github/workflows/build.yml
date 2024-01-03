@@ -45,20 +45,11 @@ jobs:
         sudo apt install libxcursor-dev
         sudo apt install libxi-dev
 
-    - name: Setup Vulkan Windows
+    - name: Setup Vulkan
       if: matrix.os == 'windows-latest'
-      uses: humbletim/install-vulkan-sdk@v1.1.1
-      with:
-        version: latest
-        cache: true
-
-    - name: Prepare Vulkan SDK Windows
-      if: matrix.os == 'windows-latest'
-      uses: humbletim/setup-vulkan-sdk@v1.2.0
-      with:
-        vulkan-query-version: latest
-        vulkan-components: Vulkan-Headers, Vulkan-Loader
-        vulkan-use-cache: true
+      run: |
+        Invoke-WebRequest -OutFile VulkanSDK.exe -Uri "https://sdk.lunarg.com/sdk/download/1.3.268.0/windows/VulkanSDK-1.3.268.0-Installer.exe"
+        Start-Process .\VulkanSDK.exe -Wait -PassThru -ArgumentList 'in', '-da', '-c'
          
     - name: Checkout
       uses: actions/checkout@v4
