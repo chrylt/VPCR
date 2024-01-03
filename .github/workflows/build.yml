@@ -49,8 +49,8 @@ jobs:
       if: matrix.os == 'windows-latest'
       run: |
         Invoke-WebRequest -OutFile VulkanSDK.exe -Uri "https://sdk.lunarg.com/sdk/download/1.3.268.0/windows/VulkanSDK-1.3.268.0-Installer.exe"
-        .\VulkanSDK.exe in --da --al -c
-        $env:Path += ';C:\VulkanSDK\1.3.268.0'
+        .\VulkanSDK.exe in --da --al -c -t "C:/Program Files (x86)/vpcr"
+        $env:Path += ';C:\Program Files (x86)\vpcr\Bin'
          
     - name: Checkout
       uses: actions/checkout@v4
