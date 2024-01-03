@@ -51,7 +51,7 @@ jobs:
         echo "Starting vulkan sdk download"
         Invoke-WebRequest -OutFile VulkanSDK.exe -Uri "https://sdk.lunarg.com/sdk/download/1.3.268.0/windows/VulkanSDK-1.3.268.0-Installer.exe"
         echo "Starting vulkan sdk install"
-        .\VulkanSDK.exe in --da --al -c
+        .\VulkanSDK.exe in --da --al -c -t "C:/Program Files (x86)/vpcr"
          
     - name: Checkout
       uses: actions/checkout@v4
