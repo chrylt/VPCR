@@ -50,8 +50,9 @@ jobs:
       run: |
         Invoke-WebRequest -OutFile VulkanSDK.exe -Uri "https://sdk.lunarg.com/sdk/download/1.3.268.0/windows/VulkanSDK-1.3.268.0-Installer.exe"
         .\VulkanSDK.exe in --da --al -c -t "C:/Program Files (x86)/vpcr"
+        Dir "C:\Program Files (x86)\vpcr\Bin" | Get-ChildItem
         echo $env:Path
-        $env:Path += ';C:\Program Files (x86)\vpcr\Bin'
+        $env:Path += ';C:\Program Files (x86)\vpcr\Bin\glslc.exe'
         #export PATH=$PATH:"/C/Program Files (x86)/vpcr/Bin"
         echo $env:Path
          
