@@ -61,6 +61,14 @@ jobs:
     - name: Setup Environment Windows
       if: matrix.os == 'windows-latest'
       uses: seanmiddleditch/gha-setup-vsdevenv@v4
+
+    - name: Test Vulkan install Windows
+      if: matrix.os == 'windows-latest'
+      run: |
+        echo "Vulkan SDK Version=='$VULKAN_SDK_VERSION'"
+        echo "VULKAN_SDK=='$VULKAN_SDK'"
+        glslangValidator --version
+        test -n "$VULKAN_SDK_VERSION"
   
     - name: Set reusable strings
       # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
