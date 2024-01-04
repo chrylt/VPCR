@@ -125,8 +125,10 @@ std::vector<Batch> LoadScene(const std::string_view scene)
     auto iterator = points.begin();
 
     std::vector<Batch> batches;
+    batches.reserve(points.size() / maxBatchSize + 1);
     while (iterator != points.end()) {
         auto& batch = batches.emplace_back();
+        batch.points.reserve(maxBatchSize);
 
         AABB box{
             {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
