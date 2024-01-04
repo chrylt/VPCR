@@ -29,6 +29,7 @@ private:
     struct Pipeline {
         tga::Buffer batchList;
         tga::Texture renderTarget;
+        tga::Texture depthBuffer;
         std::unique_ptr<TGAComputePass> clearPass;
         std::unique_ptr<TGAComputePass> lodPass;
         std::unique_ptr<TGAComputePass> projectionPass;
@@ -47,6 +48,7 @@ private:
     void CreateDynamicConst();
     void CreateBatchList();
     void CreateRenderTarget();
+    void CreateDepthBuffer();
 
     void CreateClearPass();
     void CreateLODPass();
@@ -102,6 +104,7 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     CreateDynamicConst();
     CreateBatchList();
     CreateRenderTarget();
+    CreateDepthBuffer();
 
     // Create Passes
     CreateClearPass();
@@ -257,8 +260,17 @@ void VPCRImpl::CreateRenderTarget()
 {
     const auto res = config_.Get<std::vector<std::uint32_t>>("resolution").value();
     for (auto& pipeline : pipelines_) {
-        const tga::TextureInfo textureInfo(res[0], res[1], tga::Format::r32g32b32a32_sfloat);
+        const tga::TextureInfo textureInfo(res[0], res[1], tga::Format::r32_uint);
         pipeline.renderTarget = backend_.createTexture(textureInfo);
+    }
+}
+
+void VPCRImpl::CreateDepthBuffer()
+{
+    const auto res = config_.Get<std::vector<std::uint32_t>>("resolution").value();
+    for (auto& pipeline : pipelines_) {
+        const tga::TextureInfo textureInfo(res[0], res[1], tga::Format::r32_uint);
+        pipeline.depthBuffer = backend_.createTexture(textureInfo);
     }
 }
 
@@ -272,15 +284,16 @@ void VPCRImpl::CreateClearPass()
 
         const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
                                             {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
-                                            // Set = 1: RenderTarget
-                                            {{{tga::BindingType::storageImage}}}});
+                                            // Set = 1: RenderTarget, DepthBuffer
+                                            {{{tga::BindingType::storageImage}, {tga::BindingType::storageImage}}}});
 
         const tga::ComputePassInfo passInfo(computeShader, inputLayout);
         clearPass = std::make_unique<TGAComputePass>(backend_, passInfo);
 
         clearPass->BindInput(camera_->GetBuffer(), 0, 0);
         clearPass->BindInput(dynamicConst_, 0, 1);
-        clearPass->BindInput(pipeline.renderTarget, 1);
+        clearPass->BindInput(pipeline.renderTarget, 1, 0);
+        clearPass->BindInput(pipeline.depthBuffer, 1, 1);
     }
 }
 
@@ -320,8 +333,8 @@ void VPCRImpl::CreateProjectionPass()
 
         const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
                                             {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
-                                            // Set = 1: RenderTarget
-                                            {{{tga::BindingType::storageImage}}},
+                                            // Set = 1: Rendertarget, Depthbuffer
+                                            {{{tga::BindingType::storageImage}, {tga::BindingType::storageImage}}},
                                             // Set = 2: Points
                                             {{{tga::BindingType::storageBuffer}}},
                                             // Set = 3: Batches, Batch list
@@ -332,7 +345,8 @@ void VPCRImpl::CreateProjectionPass()
 
         projectionPass->BindInput(camera_->GetBuffer(), 0, 0);
         projectionPass->BindInput(dynamicConst_, 0, 1);
-        projectionPass->BindInput(pipeline.renderTarget, 1);
+        projectionPass->BindInput(pipeline.renderTarget, 1, 0);
+        projectionPass->BindInput(pipeline.depthBuffer, 1, 1);
         projectionPass->BindInput(pointCloudAcceleration_->GetPointsBuffer(), 2);
         projectionPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 3, 0);
         projectionPass->BindInput(pipeline.batchList, 3, 1);
@@ -351,7 +365,7 @@ void VPCRImpl::CreateDisplayPass()
             tga::loadShader("../shaders/renderTarget_frag.spv", tga::ShaderType::fragment, backend_);
 
         const tga::InputLayout inputLayout({// Set = 0: RenderTarget
-                                            {{{tga::BindingType::sampler}}}});
+                                            {{{tga::BindingType::storageImage}}}});
 
         const tga::RenderPassInfo passInfo(vertexShader, fragmentShader, window_, {}, inputLayout,
                                            tga::ClearOperation::none);
