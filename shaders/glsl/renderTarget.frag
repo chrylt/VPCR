@@ -11,6 +11,6 @@ layout(location = 0) out vec4 color;
 
 void main()
 {
-    uint storedValue = imageLoad(renderTarget, ivec2(gl_FragCoord.xy)).r;
+    const uint storedValue = imageLoad(renderTarget, ivec2(gl_FragCoord.xy)).r;
     color = unpackUnorm4x8(storedValue);
 }

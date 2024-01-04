@@ -25,6 +25,6 @@ void main()
         return;
     }
 
-    imageStore(renderTarget, id, ivec4(0));
-    imageStore(depthBuffer, id, ivec4(0));
+    imageStore(renderTarget, id, uvec4(0));
+    imageStore(depthBuffer, id, uvec4(0));
 }

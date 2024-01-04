@@ -75,15 +75,15 @@ void main(){
                 const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
 
                 // depth test via 64-bit-atomicMin
-                uint depth = uint(floatBitsToInt(projected.w)); // cast instead of floatBitsToUint to avoid problems with negative numbers
+                const uint depth = uint(floatBitsToInt(projected.w)); // cast instead of floatBitsToUint to avoid problems with negative numbers
 
-                uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
+                const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
 
-				if(depth < oldValue){
-					imageAtomicExchange(renderTarget, ivec2(coords), points[k].rgba);
-				}
+                if(depth < oldValue){
+	                imageAtomicExchange(renderTarget, ivec2(coords), points[k].rgba);
+                }
 
-                imageStore(renderTarget, ivec2(coords), ivec4(points[k].rgba));
+                imageStore(renderTarget, ivec2(coords), uvec4(points[k].rgba));
             }
         }
     }
