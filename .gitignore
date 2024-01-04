@@ -5,6 +5,10 @@
 # Prerequisites
 *.d
 
+# VS Compiler directives
+CppProperties.json
+CMakeSettings.json
+
 # Compiled Object files
 *.slo
 *.lo
