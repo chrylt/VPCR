@@ -1,7 +1,8 @@
 #include "Utils.h"
 
 #define TINYGLTF_IMPLEMENTATION
-#include "../tinygltf/tiny_gltf.h"
+#include "tinygltf/tiny_gltf.h"
+
 #include <iostream>
 
 namespace
