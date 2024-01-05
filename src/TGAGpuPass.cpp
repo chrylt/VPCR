@@ -133,8 +133,8 @@ TGAComputePass::TGAComputePass(tga::Interface& tgai, const tga::ComputePassInfo&
     }
 }
 
-tga::CommandRecorder& TGAComputePass::Execute(tga::CommandRecorder& recorder, std::uint32_t dispatchSizeX,
-                                              std::uint32_t dispatchSizeY, std::uint32_t dispatchSizeZ)
+tga::CommandRecorder& TGAComputePass::Execute(tga::CommandRecorder& recorder, const std::uint32_t dispatchSizeX,
+                                              const std::uint32_t dispatchSizeY, const std::uint32_t dispatchSizeZ)
 {
     Init();
 
