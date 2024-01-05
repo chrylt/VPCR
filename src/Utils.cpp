@@ -7,13 +7,16 @@
 
 namespace
 {
-bool LoadModel(tinygltf::Model& model, const char *filename)
+//Throws exception if model was not loaded. Either no file or faulty gltf.
+tinygltf::Model LoadModel(const std::string_view filename)
 {
+    tinygltf::Model model;
+
     tinygltf::TinyGLTF loader;
     std::string err;
     std::string warn;
 
-    bool res = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+    bool res = loader.LoadASCIIFromFile(&model, &err, &warn, filename.data());
     if (!warn.empty()) {
         std::cout << "WARN: " << warn << std::endl;
     }
@@ -22,12 +25,11 @@ bool LoadModel(tinygltf::Model& model, const char *filename)
         std::cout << "ERR: " << err << std::endl;
     }
 
-    if (!res)
-        std::cout << "Failed to load glTF: " << filename << std::endl;
-    else
-        std::cout << "Loaded glTF: " << filename << std::endl;
+    if (!res) {
+        throw std::runtime_error("Failed to load glTF");
+    }
 
-    return res;
+    return model;
 }
 
 std::vector<Point> LoadScenePoints(const std::string_view scene)
