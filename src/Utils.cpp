@@ -8,7 +8,7 @@
 namespace
 {
 //Throws exception if model was not loaded. Either no file or faulty gltf.
-tinygltf::Model LoadModel(const std::string_view filename)
+auto LoadModel(const std::string_view filename)
 {
     tinygltf::Model model;
 
@@ -16,7 +16,7 @@ tinygltf::Model LoadModel(const std::string_view filename)
     std::string err;
     std::string warn;
 
-    bool res = loader.LoadASCIIFromFile(&model, &err, &warn, filename.data());
+    const auto res = loader.LoadASCIIFromFile(&model, &err, &warn, filename.data());
     if (!warn.empty()) {
         std::cout << "WARN: " << warn << std::endl;
     }
@@ -36,10 +36,10 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
 {
     std::vector<Point> points;
 
-    tinygltf::Model model = LoadModel(scene);
+    const auto model = LoadModel(scene);
 
-    glm::mat4 modelMatrix = glm::mat4(1.0);
-    if (model.nodes.empty() == false) {
+    auto modelMatrix = glm::mat4(1.0);
+    if (!model.nodes.empty()) {
         const auto& matrix = model.nodes[0].matrix;
         modelMatrix = glm::mat4(matrix[ 0], matrix[ 1], matrix[ 2], matrix[ 3], 
                                 matrix[ 4], matrix[ 5], matrix[ 6], matrix[ 7],
@@ -64,15 +64,15 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
             for (const auto& [accessorName, accessorID] : primitive.attributes) {
                 const auto& accessor = model.accessors[accessorID];
 
-                const std::size_t bufferViewID = accessor.bufferView;
+                const auto bufferViewID = accessor.bufferView;
                 const auto& bufferView = model.bufferViews[bufferViewID];
 
-                const std::size_t bufferID = bufferView.buffer;
+                const auto bufferID = bufferView.buffer;
                 const auto& buffer = model.buffers[bufferID].data;
 
-                const std::size_t primPointCount = accessor.count;
-                const std::size_t bufferOffset = accessor.byteOffset + bufferView.byteOffset;
-                const std::size_t stride = accessor.ByteStride(bufferView);
+                const auto primPointCount = accessor.count;
+                const auto bufferOffset = accessor.byteOffset + bufferView.byteOffset;
+                const auto stride = accessor.ByteStride(bufferView);
 
                 if (accessorName.compare("POSITION") == 0) {
                     for (std::uint32_t i = 0; i < primPointCount; ++i) {
@@ -86,16 +86,16 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
                         glm::vec4 fColor;
                         memcpy(&fColor, &buffer[bufferOffset + i * stride], stride);
                         
-                        points[currentPointCount + i].r = (char)(fColor.r * 255);
-                        points[currentPointCount + i].g = (char)(fColor.g * 255);
-                        points[currentPointCount + i].b = (char)(fColor.b * 255);
+                        points[currentPointCount + i].r = static_cast<std::uint8_t>(fColor.r * 255);
+                        points[currentPointCount + i].g = static_cast<std::uint8_t>(fColor.g * 255);
+                        points[currentPointCount + i].b = static_cast<std::uint8_t>(fColor.b * 255);
                         points[currentPointCount + i].a = 255;
                     }
                 }
             }
 
             //get count from first attribute
-            if (primitive.attributes.empty() == false) {
+            if (!primitive.attributes.empty()) {
                 const auto& attribute = primitive.attributes.begin()->second;
                 currentPointCount += model.accessors[attribute].count;
             }
