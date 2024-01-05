@@ -36,80 +36,69 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
 {
     std::vector<Point> points;
 
-    tinygltf::Model model;
-    assert(LoadModel(model, scene.data()));
+    tinygltf::Model model = LoadModel(scene);
 
-    auto& matrix = model.nodes[0].matrix;
-    glm::mat4 modelMatrix(
-        matrix[0],  matrix[1],  matrix[2],  matrix[3], 
-        matrix[4],  matrix[5],  matrix[6],  matrix[7], 
-        matrix[8],  matrix[9],  matrix[10], matrix[11], 
-        matrix[12], matrix[13], matrix[14], matrix[15]);
+    glm::mat4 modelMatrix = glm::mat4(1.0);
+    if (model.nodes.empty() == false) {
+        const auto& matrix = model.nodes[0].matrix;
+        modelMatrix = glm::mat4(matrix[ 0], matrix[ 1], matrix[ 2], matrix[ 3], 
+                                matrix[ 4], matrix[ 5], matrix[ 6], matrix[ 7],
+                                matrix[ 8], matrix[ 9], matrix[10], matrix[11], 
+                                matrix[12], matrix[13], matrix[14], matrix[15]);
+    }
 
-    uint32_t totalPointCount = 0;
-    for (auto& mesh : model.meshes) {
-        for (auto& primitive : mesh.primitives) {
-            for (auto& attribute : primitive.attributes) {
-                totalPointCount += model.accessors[attribute.second].count;
+    std::size_t totalPointCount = 0;
+    for (const auto& mesh : model.meshes) {
+        for (const auto& primitive : mesh.primitives) {
+            for (const auto& [accessorName, accessorID] : primitive.attributes) {
+                totalPointCount += model.accessors[accessorID].count;
                 break;
             }
         }
     }
     points.resize(totalPointCount);
 
-    uint32_t currentPointCount = 0;
-    for (auto& mesh : model.meshes) {
-        for (auto& primitive : mesh.primitives) {
-            for (auto& attribute : primitive.attributes) {
-                if (attribute.first.compare("POSITION") == 0) {
-                    auto& accessor = model.accessors[attribute.second];
+    std::size_t currentPointCount = 0;
+    for (const auto& mesh : model.meshes) {
+        for (const auto& primitive : mesh.primitives) {
+            for (const auto& [accessorName, accessorID] : primitive.attributes) {
+                const auto& accessor = model.accessors[accessorID];
 
-                    uint32_t bufferViewID = accessor.bufferView;
-                    auto& bufferView = model.bufferViews[bufferViewID];
+                const std::size_t bufferViewID = accessor.bufferView;
+                const auto& bufferView = model.bufferViews[bufferViewID];
 
-                    uint32_t bufferID = bufferView.buffer;
-                    auto& buffer = model.buffers[bufferID].data;
+                const std::size_t bufferID = bufferView.buffer;
+                const auto& buffer = model.buffers[bufferID].data;
 
-                    uint32_t primPointCount = accessor.count;
-                    uint32_t bufferOffset = accessor.byteOffset + bufferView.byteOffset;
-                    uint32_t stride = accessor.ByteStride(bufferView);
+                const std::size_t primPointCount = accessor.count;
+                const std::size_t bufferOffset = accessor.byteOffset + bufferView.byteOffset;
+                const std::size_t stride = accessor.ByteStride(bufferView);
 
-                    for (size_t i = 0; i < primPointCount; i++) {
-                        glm::vec4 fColor = glm::vec4(0,0,0,1);
-                        memcpy(&fColor, &buffer[bufferOffset + i * stride], stride);
+                if (accessorName.compare("POSITION") == 0) {
+                    for (std::uint32_t i = 0; i < primPointCount; ++i) {
+                        glm::vec4 position = glm::vec4(0,0,0,1);
+                        memcpy(&position, &buffer[bufferOffset + i * stride], stride);
 
-                        points[currentPointCount + i].position = modelMatrix * fColor;
+                        points[currentPointCount + i].position = modelMatrix * position;
                     }
-                }
-
-                if (attribute.first.compare(0, 5, "COLOR") == 0) {
-                    auto& accessor = model.accessors[attribute.second];
-
-                    uint32_t bufferViewID = accessor.bufferView;
-                    auto& bufferView = model.bufferViews[bufferViewID];
-
-                    uint32_t bufferID = bufferView.buffer;
-                    auto& buffer = model.buffers[bufferID].data;
-
-                    uint32_t pointCount = accessor.count;
-                    uint32_t bufferOffset = accessor.byteOffset + bufferView.byteOffset;
-                    uint32_t stride = accessor.ByteStride(bufferView);
-
-                    for (size_t i = 0; i < pointCount; i++) {
+                } else if (accessorName.compare(0, 5, "COLOR") == 0) {
+                    for (std::uint32_t i = 0; i < primPointCount; ++i) {
                         glm::vec4 fColor;
                         memcpy(&fColor, &buffer[bufferOffset + i * stride], stride);
                         
-                        points[currentPointCount + i].r = fColor.r * 255;
-                        points[currentPointCount + i].g = fColor.g * 255;
-                        points[currentPointCount + i].b = fColor.b * 255;
+                        points[currentPointCount + i].r = (char)(fColor.r * 255);
+                        points[currentPointCount + i].g = (char)(fColor.g * 255);
+                        points[currentPointCount + i].b = (char)(fColor.b * 255);
                         points[currentPointCount + i].a = 255;
                     }
                 }
             }
 
             //get count from first attribute
-            auto& attribute = primitive.attributes.begin()->second;
-            currentPointCount += model.accessors[attribute].count;
+            if (primitive.attributes.empty() == false) {
+                const auto& attribute = primitive.attributes.begin()->second;
+                currentPointCount += model.accessors[attribute].count;
+            }
         }
     }
 
