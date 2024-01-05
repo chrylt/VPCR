@@ -26,5 +26,5 @@ void main()
     }
 
     imageStore(renderTarget, id, uvec4(0));
-    imageStore(depthBuffer, id, uvec4(0));
+    imageStore(depthBuffer, id, uvec4(0xFFFFFFFF)); // depth-test assumes maximum depth in empty depth-buffer for atomic-min-operation
 }
