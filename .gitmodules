@@ -1,3 +1,6 @@
 [submodule "external/TGA"]
 	path = external/TGA
 	url = https://github.com/Estard/TGA
+[submodule "external/TGLTF/tinygltf"]
+	path = external/TGLTF/tinygltf
+	url = https://github.com/syoyo/tinygltf
