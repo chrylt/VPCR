@@ -1,7 +1,7 @@
 #include "Utils.h"
 
 #define TINYGLTF_IMPLEMENTATION
-#include "tinygltf/tiny_gltf.h"
+#include <tinygltf/tiny_gltf.h>
 
 #include <iostream>
 
@@ -17,16 +17,16 @@ auto LoadModel(const std::string_view filename)
     std::string warn;
 
     const auto res = loader.LoadASCIIFromFile(&model, &err, &warn, filename.data());
+    if (!res) {
+        throw std::runtime_error("Failed to load glTF");
+    }
+
     if (!warn.empty()) {
         std::cout << "WARN: " << warn << std::endl;
     }
 
     if (!err.empty()) {
         std::cout << "ERR: " << err << std::endl;
-    }
-
-    if (!res) {
-        throw std::runtime_error("Failed to load glTF");
     }
 
     return model;
