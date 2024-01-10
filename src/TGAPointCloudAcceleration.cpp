@@ -12,20 +12,75 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
 
     // Create some dummy buffers until we have an acceleration structure
 
-    // Create buffer for points
+    // Create buffers for points
     {
-        std::vector<Point> points;
+        std::vector<CompressedPosition> lowPrecisions;
+        std::vector<CompressedPosition> mediumPrecisions;
+        std::vector<CompressedPosition> highPrecisions;
+        std::vector<CompressedColor> colors;
+
         for (const auto& batch : batches) {
-            points.insert(points.end(), batch.points.begin(), batch.points.end());
+            for (const auto& point : batch.points) {
+
+                // Compress position and split into multiple buffers
+                const glm::vec3 floatPos = point.position;
+                const glm::vec3 aabbSize = batch.aabb.maxV - batch.aabb.minV;
+
+                const glm::uint32_t x30 = std::min(int(std::floor((1 << 30) * (floatPos.x - batch.aabb.minV.x) / aabbSize.x)), (1 << 30) - 1);
+                const glm::uint32_t y30 = std::min(int(std::floor((1 << 30) * (floatPos.y - batch.aabb.minV.y) / aabbSize.y)), (1 << 30) - 1);
+                const glm::uint32_t z30 = std::min(int(std::floor((1 << 30) * (floatPos.z - batch.aabb.minV.z) / aabbSize.z)), (1 << 30) - 1);
+
+                lowPrecisions.emplace_back((x30 >> 20) & 0x3FF, (y30 >> 20) & 0x3FF, (z30 >> 20) & 0x3FF, 0);
+                mediumPrecisions.emplace_back((x30 >> 10) & 0x3FF, (y30 >> 10) & 0x3FF, (z30 >> 10) & 0x3FF, 0);
+                highPrecisions.emplace_back(x30 & 0x3FF, y30 & 0x3FF, z30 & 0x3FF, 0);
+            }
         }
 
-        const tga::StagingBufferInfo stagingInfo{points.size() * sizeof(Point),
-                                                 reinterpret_cast<const std::uint8_t *>(points.data())};
-        const tga::StagingBuffer staging = backend_.createStagingBuffer(stagingInfo);
-        const tga::BufferInfo info{tga::BufferUsage::storage, points.size() * sizeof(Point), staging};
-        pointsBuffer_ = backend_.createBuffer(info);
+        const size_t numberOfPoints = lowPrecisions.size();
+        
+        // Low Precision
+        {
+            const tga::StagingBufferInfo stagingInfo{numberOfPoints * sizeof(CompressedPosition),
+                                                     reinterpret_cast<const std::uint8_t *>(lowPrecisions.data())};
+            const tga::StagingBuffer staging = backend_.createStagingBuffer(stagingInfo);
+            const tga::BufferInfo info{tga::BufferUsage::storage, numberOfPoints * sizeof(CompressedPosition), staging};
+            pointsBufferPack_.positionLowPrecision = backend_.createBuffer(info);
 
-        backend_.free(staging);
+            backend_.free(staging);
+        }
+
+        // Medium Precision
+        {
+            const tga::StagingBufferInfo stagingInfo{numberOfPoints * sizeof(CompressedPosition),
+                                                     reinterpret_cast<const std::uint8_t *>(mediumPrecisions.data())};
+            const tga::StagingBuffer staging = backend_.createStagingBuffer(stagingInfo);
+            const tga::BufferInfo info{tga::BufferUsage::storage, numberOfPoints * sizeof(CompressedPosition), staging};
+            pointsBufferPack_.positionMediumPrecision = backend_.createBuffer(info);
+
+            backend_.free(staging);
+        }
+
+        // High Precision
+        {
+            const tga::StagingBufferInfo stagingInfo{numberOfPoints * sizeof(CompressedPosition),
+                                                     reinterpret_cast<const std::uint8_t *>(highPrecisions.data())};
+            const tga::StagingBuffer staging = backend_.createStagingBuffer(stagingInfo);
+            const tga::BufferInfo info{tga::BufferUsage::storage, numberOfPoints * sizeof(CompressedPosition), staging};
+            pointsBufferPack_.positionHighPrecision = backend_.createBuffer(info);
+
+            backend_.free(staging);
+        }
+
+        // Colors
+        {
+            const tga::StagingBufferInfo stagingInfo{numberOfPoints * sizeof(CompressedColor),
+                                                     reinterpret_cast<const std::uint8_t *>(lowPrecisions.data())};
+            const tga::StagingBuffer staging = backend_.createStagingBuffer(stagingInfo);
+            const tga::BufferInfo info{tga::BufferUsage::storage, numberOfPoints * sizeof(CompressedColor), staging};
+            pointsBufferPack_.colors = backend_.createBuffer(info);
+
+            backend_.free(staging);
+        }
     }
 
     // Create buffer for batches
@@ -59,7 +114,10 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
     }
 }
 
-tga::Buffer TGAPointCloudAcceleration::GetPointsBuffer() const { return pointsBuffer_; }
+TGAPointCloudAcceleration::PointBuffers TGAPointCloudAcceleration::GetPointsBufferPack() const
+{
+    return pointsBufferPack_;
+}
 
 tga::Buffer TGAPointCloudAcceleration::GetAccelerationStructureBuffer() const { return accelerationBuffer_; }
 
@@ -69,7 +127,10 @@ std::uint32_t TGAPointCloudAcceleration::GetBatchCount() const { return batchCou
 
 TGAPointCloudAcceleration::~TGAPointCloudAcceleration()
 {
-    backend_.free(pointsBuffer_);
+    backend_.free(pointsBufferPack_.positionLowPrecision);
+    backend_.free(pointsBufferPack_.positionMediumPrecision);
+    backend_.free(pointsBufferPack_.positionHighPrecision);
+    backend_.free(pointsBufferPack_.colors);
     backend_.free(batchesBuffer_);
     backend_.free(accelerationBuffer_);
 }

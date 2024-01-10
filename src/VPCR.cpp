@@ -335,8 +335,11 @@ void VPCRImpl::CreateProjectionPass()
                                             {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
                                             // Set = 1: Rendertarget, Depthbuffer
                                             {{{tga::BindingType::storageImage}, {tga::BindingType::storageImage}}},
-                                            // Set = 2: Points
-                                            {{{tga::BindingType::storageBuffer}}},
+                                            // Set = 2: PointsPositionLowPrecision, PointsPositionMediumPrecision, PointsPositionHighPrecision, PointsColor
+                                            {{{tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer}}},
                                             // Set = 3: Batches, Batch list
                                             {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}}});
 
@@ -347,7 +350,14 @@ void VPCRImpl::CreateProjectionPass()
         projectionPass->BindInput(dynamicConst_, 0, 1);
         projectionPass->BindInput(pipeline.renderTarget, 1, 0);
         projectionPass->BindInput(pipeline.depthBuffer, 1, 1);
-        projectionPass->BindInput(pointCloudAcceleration_->GetPointsBuffer(), 2);
+
+        // Point information buffers
+        const auto& pointsBufferPack = pointCloudAcceleration_->GetPointsBufferPack();
+        projectionPass->BindInput(pointsBufferPack.positionLowPrecision, 2, 0);
+        projectionPass->BindInput(pointsBufferPack.positionMediumPrecision, 2, 1);
+        projectionPass->BindInput(pointsBufferPack.positionHighPrecision, 2, 2);
+        projectionPass->BindInput(pointsBufferPack.colors, 2, 3);
+
         projectionPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 3, 0);
         projectionPass->BindInput(pipeline.batchList, 3, 1);
     }

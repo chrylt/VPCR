@@ -33,8 +33,20 @@ layout(set = 0, binding = 1) uniform DynamicConst{
 layout(set = 1, binding = 0, r32ui) uniform uimage2D renderTarget;
 layout(set = 1, binding = 1, r32ui) uniform uimage2D depthBuffer;
 
-layout(set = 2, binding = 0) readonly buffer Points{
-    Point points[];
+layout(set = 2, binding = 0) readonly buffer Points_Position_low_Precision{
+    uint pointsPosLow[];
+};
+
+layout(set = 2, binding = 1) readonly buffer Points_Position_medium_Precision{
+    uint pointsPosMedium[];
+};
+
+layout(set = 2, binding = 2) readonly buffer Points_Position_high_Precision{
+    uint pointsPosHigh[];
+};
+
+layout(set = 2, binding = 3) readonly buffer Points_Color{
+    uint pointsRgba[];
 };
 
 layout(set = 3, binding = 0) readonly buffer Batches{
@@ -48,8 +60,20 @@ layout(set = 3, binding = 1) readonly buffer BatchList{
 
 layout(local_size_x = 128) in;
 
+vec3 getPointPosition(Batch currBatch, uint pointIdx){
+    // TODO
+    // determine precision by projecting batch aabb to screen
+    const vec4 projMinV = camera.projection * camera.view * vec4(currBatch.box.minV , 1);
+    const vec4 projMaxV = camera.projection * camera.view * vec4(currBatch.box.maxV , 1);
+
+    return vec3(0);
+}
+
+uint getPointColor(uint idx){
+    return pointsRgba[idx];
+}
+
 void main(){
-    // TODO: @Chrylt
 
     const uint id = gl_GlobalInvocationID.x;
     if (id >= workerCount){
@@ -66,7 +90,7 @@ void main(){
         const Batch batch = batches[batchList[i]];
         for (uint k = batch.pointOffset; k < batch.pointOffset + batch.pointCount; ++k){
 
-            const vec4 projected = camera.projection * camera.view * vec4(points[k].position, 1);
+            const vec4 projected = camera.projection * camera.view * vec4(getPointPosition(batch, k), 1);
 
             if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
                     (-projected.w <= projected.y) && (projected.y <= projected.w) &&
@@ -80,7 +104,7 @@ void main(){
                 const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
 
                 if(depth < oldValue){
-	                imageAtomicExchange(renderTarget, ivec2(coords), points[k].rgba);
+	                imageAtomicExchange(renderTarget, ivec2(coords), getPointColor(k));
                 }
             }
         }
