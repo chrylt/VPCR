@@ -26,13 +26,16 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
                 const glm::vec3 floatPos = point.position;
                 const glm::vec3 aabbSize = batch.aabb.maxV - batch.aabb.minV;
 
-                const glm::uint32_t x30 = std::min(int(std::floor((1 << 30) * (floatPos.x - batch.aabb.minV.x) / aabbSize.x)), (1 << 30) - 1);
-                const glm::uint32_t y30 = std::min(int(std::floor((1 << 30) * (floatPos.y - batch.aabb.minV.y) / aabbSize.y)), (1 << 30) - 1);
-                const glm::uint32_t z30 = std::min(int(std::floor((1 << 30) * (floatPos.z - batch.aabb.minV.z) / aabbSize.z)), (1 << 30) - 1);
+                const std::uint32_t x30 = std::min(uint32_t(std::floor((1 << 30) * (floatPos.x - batch.aabb.minV.x) / aabbSize.x)), uint32_t((1 << 30) - 1));
+                const std::uint32_t y30 = std::min(uint32_t(std::floor((1 << 30) * (floatPos.y - batch.aabb.minV.y) / aabbSize.y)), uint32_t((1 << 30) - 1));
+                const std::uint32_t z30 = std::min(uint32_t(std::floor((1 << 30) * (floatPos.z - batch.aabb.minV.z) / aabbSize.z)), uint32_t((1 << 30) - 1));
 
                 lowPrecisions.emplace_back((x30 >> 20) & 0x3FF, (y30 >> 20) & 0x3FF, (z30 >> 20) & 0x3FF, 0);
                 mediumPrecisions.emplace_back((x30 >> 10) & 0x3FF, (y30 >> 10) & 0x3FF, (z30 >> 10) & 0x3FF, 0);
                 highPrecisions.emplace_back(x30 & 0x3FF, y30 & 0x3FF, z30 & 0x3FF, 0);
+
+                // Pass on colors
+                colors.emplace_back(point.color);
             }
         }
 
@@ -74,7 +77,7 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
         // Colors
         {
             const tga::StagingBufferInfo stagingInfo{numberOfPoints * sizeof(CompressedColor),
-                                                     reinterpret_cast<const std::uint8_t *>(lowPrecisions.data())};
+                                                     reinterpret_cast<const std::uint8_t *>(colors.data())};
             const tga::StagingBuffer staging = backend_.createStagingBuffer(stagingInfo);
             const tga::BufferInfo info{tga::BufferUsage::storage, numberOfPoints * sizeof(CompressedColor), staging};
             pointsBufferPack_.colors = backend_.createBuffer(info);
