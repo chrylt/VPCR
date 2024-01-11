@@ -64,7 +64,7 @@ vec3 getPointPosition(Batch currBatch, uint pointIdx){
 
     // determine precision by projecting batch aabb to screen
         // create aabb corner points
-    vec3[8] aabbCorners = vec3[](
+    const vec3[8] aabbCorners = vec3[](
         currBatch.box.minV, // 0 - minimum
         vec3(currBatch.box.minV.x, currBatch.box.minV.y, currBatch.box.maxV.z), // 0 0 1 -> 1
         vec3(currBatch.box.minV.x, currBatch.box.maxV.y, currBatch.box.minV.z), // 0 1 0 -> 2
@@ -81,36 +81,36 @@ vec3 getPointPosition(Batch currBatch, uint pointIdx){
 
     for(uint i=0; i < 8; i++){
         // transform aabb & perspective divide
-        vec4 divReady = camera.projection * camera.view * vec4(aabbCorners[i], 1);
-        vec2 divided = (divReady / abs(divReady.w)).xy;
-        vec2 pixelSpace = ((divided + 1) / 2) * camera.resolution;
+        const vec4 divReady = camera.projection * camera.view * vec4(aabbCorners[i], 1);
+        const vec2 divided = (divReady / abs(divReady.w)).xy;
+        const vec2 pixelSpace = ((divided + 1) / 2) * camera.resolution;
 
         screenMin = uvec2(min(screenMin.x, pixelSpace.x), min(screenMin.y, pixelSpace.y));
         screenMax = uvec2(max(screenMax.x, pixelSpace.x), max(screenMax.y, pixelSpace.y));
     }
 
-    uint pixelExtend = max(screenMax.x - screenMin.x, screenMax.y - screenMin.y);
+    const uint pixelExtend = max(screenMax.x - screenMin.x, screenMax.y - screenMin.y);
 
     // create coordinate at precision level
     const vec3 boxSize = currBatch.box.maxV - currBatch.box.minV;
     vec3 resultPosition = currBatch.box.minV;
 
         // low precision
-    uint encodedLow = pointsPosLow[pointIdx];
-    vec3 offsetLow = vec3(encodedLow & 0x3FF, (encodedLow >> 10) & 0x3FF, (encodedLow >> 20) & 0x3FF) / (1 << 10) * boxSize;
+    const uint encodedLow = pointsPosLow[pointIdx];
+    const vec3 offsetLow = vec3(encodedLow & 0x3FF, (encodedLow >> 10) & 0x3FF, (encodedLow >> 20) & 0x3FF) / (1 << 10) * boxSize;
     resultPosition += offsetLow;
 
     if(pixelExtend > 512) {
         // add medium precision
-        uint encodedMedium = pointsPosMedium[pointIdx];
-        vec3 offsetMedium = vec3(encodedMedium & 0x3FF, (encodedMedium >> 10) & 0x3FF, (encodedMedium >> 20) & 0x3FF) / (1 << 20) * boxSize;
+        const uint encodedMedium = pointsPosMedium[pointIdx];
+        const vec3 offsetMedium = vec3(encodedMedium & 0x3FF, (encodedMedium >> 10) & 0x3FF, (encodedMedium >> 20) & 0x3FF) / (1 << 20) * boxSize;
         resultPosition += offsetMedium;
     }
 
     if(pixelExtend > 524288) {  // We will probably never need this. Do we leave this here or delete (along with buffer for it)?
         // add high precision
-        uint encodedHigh = pointsPosHigh[pointIdx];
-        vec3 offsetHigh = vec3(encodedHigh & 0x3FF, (encodedHigh >> 10) & 0x3FF, (encodedHigh >> 20) & 0x3FF) / (1 << 30) * boxSize;
+        const uint encodedHigh = pointsPosHigh[pointIdx];
+        const vec3 offsetHigh = vec3(encodedHigh & 0x3FF, (encodedHigh >> 10) & 0x3FF, (encodedHigh >> 20) & 0x3FF) / (1 << 30) * boxSize;
         resultPosition += offsetHigh;
     }
 
