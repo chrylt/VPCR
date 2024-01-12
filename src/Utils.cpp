@@ -144,3 +144,50 @@ std::vector<Batch> LoadScene(const std::string_view scene)
 
     return batches;
 }
+
+std::uint64_t Point::mortonIndex() const {
+    auto ix = reinterpret_cast<const std::uint32_t&>(position.x);
+    auto iy = reinterpret_cast<const std::uint32_t&>(position.y);
+    auto iz = reinterpret_cast<const std::uint32_t&>(position.z);
+
+    // Get signed bit
+    const auto ixs = static_cast<const std::int32_t>(ix) >> 31U;
+    const auto iys = static_cast<const std::int32_t>(iy) >> 31U;
+    const auto izs = static_cast<const std::int32_t>(iz) >> 31U;
+
+    // This is a combination of a fast absolute value and a bias.
+    //
+    // We need to adjust the values so -FLT_MAX is close to 0.
+    //
+    ix = (((ix & 0x7FFFFFFFUL) ^ ixs) - ixs) + 0x7FFFFFFFUL;
+    iy = (((iy & 0x7FFFFFFFUL) ^ iys) - iys) + 0x7FFFFFFFUL;
+    iz = (((iz & 0x7FFFFFFFUL) ^ izs) - izs) + 0x7FFFFFFFUL;
+
+    // We will only use the 21 MSBs
+    std::uint64_t xx = ix >> 11U;
+    std::uint64_t yy = iy >> 11U;
+    std::uint64_t zz = iz >> 11U;
+
+    // Dilate and combine
+    xx = (xx | (xx << 32U)) & 0x001f00000000ffffLL;
+    yy = (yy | (yy << 32U)) & 0x001f00000000ffffLL;
+    zz = (zz | (zz << 32U)) & 0x001f00000000ffffLL;
+
+    xx = (xx | (xx << 16U)) & 0x001f0000ff0000ffLL;
+    yy = (yy | (yy << 16U)) & 0x001f0000ff0000ffLL;
+    zz = (zz | (zz << 16U)) & 0x001f0000ff0000ffLL;
+
+    xx = (xx | (xx << 8U)) & 0x100f00f00f00f00fLL;
+    yy = (yy | (yy << 8U)) & 0x100f00f00f00f00fLL;
+    zz = (zz | (zz << 8U)) & 0x100f00f00f00f00fLL;
+
+    xx = (xx | (xx << 4U)) & 0x10c30c30c30c30c3LL;
+    yy = (yy | (yy << 4U)) & 0x10c30c30c30c30c3LL;
+    zz = (zz | (zz << 4U)) & 0x10c30c30c30c30c3LL;
+
+    xx = (xx | (xx << 2U)) & 0x1249249249249249LL;
+    yy = (yy | (yy << 2U)) & 0x1249249249249249LL;
+    zz = (zz | (zz << 2U)) & 0x1249249249249249LL;
+
+    return xx | (yy << 1U) | (zz << 2U);
+}
