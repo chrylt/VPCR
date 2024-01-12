@@ -2,7 +2,6 @@
 
 #define TINYGLTF_IMPLEMENTATION
 #include <tinygltf/tiny_gltf.h>
-
 #include <iostream>
 
 namespace
@@ -203,7 +202,7 @@ BatchInfo::BatchInfo(auto _maxBatchCount, auto _iteration, auto _mortonCode, aut
 std::vector<BatchInfo> BatchInfo::Subdivide() {
     std::vector<BatchInfo> children;
 
-    if (count < 4) {
+    if (count < maxBatchCount) {
         leaf = true;
     } else {
         for (size_t i = 0; i < 8; i++) {
