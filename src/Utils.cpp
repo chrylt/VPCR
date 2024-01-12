@@ -106,38 +106,41 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
 }
 }  // namespace
 
-std::vector<Batch> LoadScene(const std::string_view scene)
-{
-    // TODO @J3oss
-    // Vertex order optimization
+std::vector<Batch> LoadScene(const std::string_view scene) {
+    auto points = LoadScenePoints(scene);
+    //TODO add a hashmap for morton code to make this faster or 
+    //Implement this https://ieeexplore.ieee.org/document/5383353
+    std::sort(points.begin(), points.end());
 
-    // Create dummy batches until we have vertex order optimization
-    constexpr auto maxBatchSize = 4;
-    const auto points = LoadScenePoints(scene);
-    auto iterator = points.begin();
+    constexpr auto maxBatchSize = 12;
+    auto batchInfo = BatchInfo(maxBatchSize, 0U, 0ULL, points.size(), points.data());
+    auto batchInfos = batchInfo.Subdivide();
 
+    //TODO batches should be now adjusted to not contain partial pieces of data
+    //just indicies from points array which is availble in batch info
     std::vector<Batch> batches;
     batches.reserve(points.size() / maxBatchSize + 1);
-    while (iterator != points.end()) {
+    for (auto& batchInfo : batchInfos) {
+        if (!batchInfo.leaf || batchInfo.count == 0) {
+            continue;
+        }
+
         auto& batch = batches.emplace_back();
-        batch.points.reserve(maxBatchSize);
+        batch.points.reserve(batchInfo.count);
 
         AABB box{
             {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-             std::numeric_limits<float>::infinity()},
+                std::numeric_limits<float>::infinity()},
             {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-             -std::numeric_limits<float>::infinity()},
+                -std::numeric_limits<float>::infinity()},
         };
-        for (std::uint32_t i = 0; i < maxBatchSize; ++i) {
-            if (iterator == points.end()) {
-                break;
-            }
 
-            box.minV = glm::min(box.minV, (*iterator).position);
-            box.maxV = glm::max(box.maxV, (*iterator).position);
+        for (std::uint32_t i = batchInfo.startId; i < batchInfo.startId + batchInfo.count; ++i) {
+            Point& p = points[i];
+            box.minV = glm::min(box.minV, p.position);
+            box.maxV = glm::max(box.maxV, p.position);
 
-            batch.points.push_back(*iterator);
-            ++iterator;
+            batch.points.push_back(p);
         }
         batch.aabb = box;
     }
@@ -190,4 +193,49 @@ std::uint64_t Point::mortonIndex() const {
     zz = (zz | (zz << 2U)) & 0x1249249249249249LL;
 
     return xx | (yy << 1U) | (zz << 2U);
+}
+
+BatchInfo::BatchInfo(auto _maxBatchCount, auto _iteration, auto _mortonCode, auto _count, auto _points)
+    : maxBatchCount(_maxBatchCount), iteration(_iteration), mortonCode(_mortonCode), count(_count), points(_points) {
+    leaf = false;
+}
+
+std::vector<BatchInfo> BatchInfo::Subdivide() {
+    std::vector<BatchInfo> children;
+
+    if (count < 4) {
+        leaf = true;
+    } else {
+        for (size_t i = 0; i < 8; i++) {
+            children.push_back(
+                BatchInfo(maxBatchCount, iteration + 1, i << (60 - iteration * 3) | mortonCode, 0U, points));
+        }
+
+        // splitting points into octree nodes
+        auto oldChild = ~0U;
+        for (auto i = startId; i < startId + count; i++) {
+            auto currentChild = static_cast<std::uint32_t>((points[i].mortonIndex() >> (60U - iteration * 3U)) & 0x7U);
+
+            if (oldChild != currentChild) {
+                children[currentChild].startId = i;
+                oldChild = currentChild;
+            }
+            children[currentChild].count++;
+        }
+
+        for (auto i = 0; i < 8; i++) {
+            auto res = children[i].Subdivide();
+
+            // return just the leafs
+            for (auto& node : res) {
+                if (!node.leaf || node.count == 0) {
+                    continue;
+                }
+
+                children.push_back(node);
+            }
+        }
+    }
+
+    return children;
 }

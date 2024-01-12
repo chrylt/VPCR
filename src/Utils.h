@@ -29,6 +29,24 @@ struct AABB {
     alignas(16) glm::vec3 maxV;
 };
 
+class BatchInfo {
+public:
+    bool leaf = false;
+
+    std::uint32_t iteration = 0U;
+    std::uint64_t mortonCode = 0ULL;
+
+    std::uint32_t count = 0U;
+    std::uint32_t startId = 0U;
+
+    const Point *points = nullptr;
+    const std::uint32_t maxBatchCount = 0U;
+
+    BatchInfo(auto _maxBatchCount, auto _iteration, auto _mortonCode, auto _count, auto _points);
+
+    std::vector<BatchInfo> Subdivide();
+};
+
 struct Batch {
     AABB aabb;
     std::vector<Point> points;
