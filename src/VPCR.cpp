@@ -39,6 +39,7 @@ private:
 
     struct DynamicConst {
         // Misc information we need on gpu
+        std::uint32_t totalBatchCount;
         std::uint32_t threadCount;
     };
 
@@ -201,6 +202,9 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
 
     // Upload
     camera_->Upload(commandRecorder);
+    // Set the batch count to 0 as the LOD pass will determine the batches to be rendered
+    constexpr std::uint32_t zero = 0;
+    commandRecorder.inlineBufferUpdate(pipelines_[frameIndex].batchList, &zero, sizeof(zero));
     commandRecorder.barrier(tga::PipelineStage::Transfer, tga::PipelineStage::ComputeShader);
 
     // Collect Execution Commands
@@ -224,7 +228,7 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
 
 void VPCRImpl::CreateDynamicConst()
 {
-    DynamicConst dynamicConst{WorkerCount};
+    DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(), WorkerCount};
 
     tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);

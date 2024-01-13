@@ -32,6 +32,7 @@ layout(set = 0, binding = 0) uniform Camera{
 }camera;
 
 layout(set = 0, binding = 1) uniform DynamicConst{
+    uint totalBatchCount;
     uint workerCount;
 };
 
@@ -61,13 +62,14 @@ void main(){
         return;
     }
 
-    uint workAmount = batchCount / workerCount;
+    const uint workAmount = uint(ceil(float(batchCount) / workerCount));
     const uint workOffset = workAmount * id;
-    if (id == workerCount - 1){
-        workAmount = batchCount - workAmount * workerCount;
-    }
     
     for (uint i = workOffset; i < workOffset + workAmount; ++i){
+        if (i >= batchCount){
+            continue;
+        }
+
         const Node batchNode = nodes[batchList[i]];
         for (uint k = batchNode.pointOffset; k < batchNode.pointOffset + (batchNode.maskDepthCount >> 13); ++k){
 

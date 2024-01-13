@@ -25,6 +25,7 @@ layout(set = 0, binding = 0) uniform Camera{
 }camera;
 
 layout(set = 0, binding = 1) uniform DynamicConst{
+    uint totalBatchCount;
     uint workerCount;
 };
 
@@ -32,7 +33,7 @@ layout(set = 1, binding = 0) readonly buffer BatchNodes{
     Node nodes[];  
 };
 
-layout(set = 1, binding = 1) readonly buffer BatchList{
+layout(set = 1, binding = 1) buffer BatchList{
     uint batchCount;
     uint batchList[];
 };
@@ -41,4 +42,47 @@ layout(local_size_x = 128) in;
 
 void main(){
     // TODO: @Atzubi
+    const uint id = gl_GlobalInvocationID.x;
+    if (id >= workerCount){
+        return;
+    }
+
+    const uint workAmount = uint(ceil(float(totalBatchCount) / workerCount));
+    const uint workOffset = workAmount * id;
+    
+    for (uint i = workOffset; i < workOffset + workAmount; ++i){
+        if(i >= totalBatchCount){
+            continue;
+        }
+
+        const Node batchNode = nodes[i];
+    
+        const vec3[8] aabbCorners = vec3[](
+            vec3(batchNode.box.minX, batchNode.box.minY, batchNode.box.minZ), // 0 - minimum
+            vec3(batchNode.box.minX, batchNode.box.minY, batchNode.box.maxZ), // 0 0 1 -> 1
+            vec3(batchNode.box.minX, batchNode.box.maxY, batchNode.box.minZ), // 0 1 0 -> 2
+            vec3(batchNode.box.minX, batchNode.box.maxY, batchNode.box.maxZ), // 0 1 1 -> 3
+            vec3(batchNode.box.maxX, batchNode.box.minY, batchNode.box.minZ), // 1 0 0 -> 4
+            vec3(batchNode.box.maxX, batchNode.box.minY, batchNode.box.maxZ), // 1 0 1 -> 5
+            vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.minZ), // 1 1 0 -> 6
+            vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.maxZ)  // 7 - maximum
+        );
+    
+        bool isVisible = false;
+        for (uint i = 0; i < 8; ++i) {
+            vec4 corner = camera.projection * camera.view * vec4(aabbCorners[i], 1);
+            if((-corner.w <= corner.x) && (corner.x <= corner.w) &&
+               (-corner.w <= corner.y) && (corner.y <= corner.w) &&
+               (0.f <= corner.z) && (corner.z <= corner.w)){
+                isVisible = true;   
+            }
+        }
+    
+        if (isVisible){
+            const uint currentBatchCount = atomicAdd(batchCount, 1);
+            batchList[currentBatchCount] = i;
+
+            // TODO: Add LOD selection
+        }
+    }
 }
