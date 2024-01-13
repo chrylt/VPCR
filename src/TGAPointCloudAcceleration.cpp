@@ -10,8 +10,6 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
     const auto batches = LoadScene(scenePath);
     batchCount_ = static_cast<std::uint32_t>(batches.size());
 
-    // Create some dummy buffers until we have an acceleration structure
-
     // Create buffers for points
     {
         std::vector<CompressedPosition> lowPrecisions;
@@ -26,13 +24,14 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
                 const glm::vec3 floatPos = point.position;
                 const glm::vec3 aabbSize = batch.aabb.maxV - batch.aabb.minV;
 
+                // convert float position to 30-bit fixed precision relative to BB
                 const std::uint32_t x30 = std::min(uint32_t(std::floor((1 << 30) * (floatPos.x - batch.aabb.minV.x) / aabbSize.x)), uint32_t((1 << 30) - 1));
                 const std::uint32_t y30 = std::min(uint32_t(std::floor((1 << 30) * (floatPos.y - batch.aabb.minV.y) / aabbSize.y)), uint32_t((1 << 30) - 1));
                 const std::uint32_t z30 = std::min(uint32_t(std::floor((1 << 30) * (floatPos.z - batch.aabb.minV.z) / aabbSize.z)), uint32_t((1 << 30) - 1));
 
-                lowPrecisions.emplace_back((x30 >> 20) & 0x3FF, (y30 >> 20) & 0x3FF, (z30 >> 20) & 0x3FF, 0);
-                mediumPrecisions.emplace_back((x30 >> 10) & 0x3FF, (y30 >> 10) & 0x3FF, (z30 >> 10) & 0x3FF, 0);
-                highPrecisions.emplace_back(x30 & 0x3FF, y30 & 0x3FF, z30 & 0x3FF, 0);
+                lowPrecisions.emplace_back((x30 >> 20) & 0x3FF, (y30 >> 20) & 0x3FF, (z30 >> 20) & 0x3FF, 0);       // take upmost 10 bit of each coordinate as low precision
+                mediumPrecisions.emplace_back((x30 >> 10) & 0x3FF, (y30 >> 10) & 0x3FF, (z30 >> 10) & 0x3FF, 0);    // take next lower 10 bit as medium precision
+                highPrecisions.emplace_back(x30 & 0x3FF, y30 & 0x3FF, z30 & 0x3FF, 0);                              // take lowest 10 bit as high precision
 
                 // Pass on colors
                 colors.emplace_back(point.color);

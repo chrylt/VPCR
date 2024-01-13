@@ -100,14 +100,14 @@ vec3 getPointPosition(const Batch currBatch, const uint pointIdx){
     const vec3 offsetLow = vec3(encodedLow & 0x3FF, (encodedLow >> 10) & 0x3FF, (encodedLow >> 20) & 0x3FF) / (1 << 10) * boxSize;
     resultPosition += offsetLow;
 
-    if(pixelExtend > 512) { // 2^(10 bits) = 1024 different values; can accurately display across 512 pixels
+    if(pixelExtend > 512) { // 2^(10 bits) = 1024 different values; can accurately display BB across 512 pixels
         /// add medium precision
         const uint encodedMedium = pointsPosMedium[pointIdx];
         const vec3 offsetMedium = vec3(encodedMedium & 0x3FF, (encodedMedium >> 10) & 0x3FF, (encodedMedium >> 20) & 0x3FF) / (1 << 20) * boxSize;
         resultPosition += offsetMedium;
     }
 
-    if(pixelExtend > 524288) {  // 2^(20 bits) = 1'048'576 different values; can accurately display across 524'288 pixels
+    if(pixelExtend > 524288) {  // 2^(20 bits) = 1'048'576 different values; can accurately display BB across 524'288 pixels
         /// add high precision
         const uint encodedHigh = pointsPosHigh[pointIdx];
         const vec3 offsetHigh = vec3(encodedHigh & 0x3FF, (encodedHigh >> 10) & 0x3FF, (encodedHigh >> 20) & 0x3FF) / (1 << 30) * boxSize;
