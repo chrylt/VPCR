@@ -76,8 +76,8 @@ vec3 getPointPosition(const Batch currBatch, const uint pointIdx){
     );
 
     /// find aabb extend on screen
-    uvec2 screenMin = camera.resolution;    // theoretically not ideal at edges!
-    uvec2 screenMax = uvec2(0);             // 
+    uvec2 screenMin = camera.resolution;
+    uvec2 screenMax = uvec2(0);
 
     for(uint i=0; i < 8; i++){
         /// transform aabb & perspective divide
@@ -85,8 +85,8 @@ vec3 getPointPosition(const Batch currBatch, const uint pointIdx){
         const vec2 divided = (divReady / abs(divReady.w)).xy;
         const vec2 pixelSpace = ((divided + 1) / 2) * camera.resolution;
 
-        screenMin = uvec2(min(screenMin.x, pixelSpace.x), min(screenMin.y, pixelSpace.y));
-        screenMax = uvec2(max(screenMax.x, pixelSpace.x), max(screenMax.y, pixelSpace.y));
+        screenMin = ivec2(min(screenMin.x, pixelSpace.x), min(screenMin.y, pixelSpace.y));
+        screenMax = ivec2(max(screenMax.x, pixelSpace.x), max(screenMax.y, pixelSpace.y));
     }
 
     const uint pixelExtend = max(screenMax.x - screenMin.x, screenMax.y - screenMin.y);
