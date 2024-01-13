@@ -13,7 +13,7 @@ struct Node{
     AABB box;
     uint childrenPointer;
     uint pointOffset;
-    uint pointCountAndMask;  // higher 24 bits are the count, lower 8 the child mask
+    uint maskDepthCount;  // higher 19 bits are the count, lower 8 the child mask, middle 5 the tree depth
 };
 
 layout(set = 0, binding = 0) uniform Camera{
