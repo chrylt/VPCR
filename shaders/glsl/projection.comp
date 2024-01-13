@@ -8,14 +8,19 @@ struct Point{
 };
 
 struct AABB{
-    vec3 minV;
-    vec3 maxV;
+    float minX;
+    float minY;
+    float minZ;
+    float maxX;
+    float maxY;
+    float maxZ;
 };
 
-struct Batch{
+struct Node{
     AABB box;
+    uint childrenPointer;
     uint pointOffset;
-    uint pointCount;
+    uint maskDepthCount;  // higher 19 bits are the count, lower 8 the child mask, middle 5 the tree depth
 };
 
 layout(set = 0, binding = 0) uniform Camera{
@@ -37,8 +42,8 @@ layout(set = 2, binding = 0) readonly buffer Points{
     Point points[];
 };
 
-layout(set = 3, binding = 0) readonly buffer Batches{
-    Batch batches[];  
+layout(set = 3, binding = 0) readonly buffer BatchNodes{
+    Node nodes[];  
 };
 
 layout(set = 3, binding = 1) readonly buffer BatchList{
@@ -63,8 +68,8 @@ void main(){
     }
     
     for (uint i = workOffset; i < workOffset + workAmount; ++i){
-        const Batch batch = batches[batchList[i]];
-        for (uint k = batch.pointOffset; k < batch.pointOffset + batch.pointCount; ++k){
+        const Node batchNode = nodes[batchList[i]];
+        for (uint k = batchNode.pointOffset; k < batchNode.pointOffset + (batchNode.maskDepthCount >> 13); ++k){
 
             const vec4 projected = camera.projection * camera.view * vec4(points[k].position, 1);
 

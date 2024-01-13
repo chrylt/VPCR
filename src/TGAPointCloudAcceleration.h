@@ -6,10 +6,9 @@
 
 class TGAPointCloudAcceleration final {
 public:
-    TGAPointCloudAcceleration(tga::Interface &tgai, std::string_view scenePath);
+    TGAPointCloudAcceleration(tga::Interface& tgai, std::string_view scenePath);
 
     tga::Buffer GetPointsBuffer() const;
-    tga::Buffer GetAccelerationStructureBuffer() const;
     tga::Buffer GetBatchesBuffer() const;
 
     std::uint32_t GetBatchCount() const;
@@ -17,7 +16,7 @@ public:
     ~TGAPointCloudAcceleration();
 
 private:
-    tga::Interface &backend_;
+    tga::Interface& backend_;
 
     std::uint32_t batchCount_;
 

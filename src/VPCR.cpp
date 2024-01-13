@@ -11,7 +11,7 @@ namespace
 {
 // Should match compute shaders
 constexpr std::uint32_t ComputeLaneCount = 128;
-constexpr std::uint32_t WorkerCount = 1000;  // TODO: get hardware thread count + heuristic
+constexpr std::uint32_t WorkerCount = 1536;  // TODO: get hardware thread count + heuristic
 
 class VPCRImpl final : public VPCR {
 public:
@@ -306,9 +306,7 @@ void VPCRImpl::CreateLODPass()
 
         const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
                                             {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
-                                            // Set = 1: Acceleration structure
-                                            {{{tga::BindingType::storageBuffer}}},
-                                            // Set = 2: Batches, Batch List
+                                            // Set = 1: Batches, Batch List
                                             {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}}});
 
         const tga::ComputePassInfo passInfo(computeShader, inputLayout);
@@ -316,9 +314,8 @@ void VPCRImpl::CreateLODPass()
 
         lodPass->BindInput(camera_->GetBuffer(), 0, 0);
         lodPass->BindInput(dynamicConst_, 0, 1);
-        lodPass->BindInput(pointCloudAcceleration_->GetAccelerationStructureBuffer(), 1);
-        lodPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 2, 0);
-        lodPass->BindInput(pipeline.batchList, 2, 1);
+        lodPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 1, 0);
+        lodPass->BindInput(pipeline.batchList, 1, 1);
     }
 }
 
