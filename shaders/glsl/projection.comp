@@ -60,7 +60,7 @@ layout(set = 3, binding = 1) readonly buffer BatchList{
 
 layout(local_size_x = 128) in;
 
-vec3 getPointPosition(Batch currBatch, uint pointIdx){
+vec3 getPointPosition(const Batch currBatch, const uint pointIdx){
 
     // determine precision by projecting batch aabb to screen
         // create aabb corner points
