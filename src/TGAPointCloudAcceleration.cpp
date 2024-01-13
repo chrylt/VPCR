@@ -17,7 +17,7 @@ struct Node {
 };
 
 std::vector<Point> SampleLeafs(const std::uint32_t maxCount, const std::uint64_t prefix, const std::uint8_t iteration,
-                               std::vector<Batch>& batches, std::vector<Point>& points)
+                               std::vector<Batch>& batches)
 {
     // Loop over all batches and find all those that have the matching prefix, then select maxCount random points in all
     // of them, extract and return them
@@ -72,17 +72,15 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
 {
     auto originalBatches = LoadScene(scenePath);
 
-    std::vector<Point> originalPoints;
-    originalPoints.reserve(originalBatches.size() * MaxBatchSize);
-
     // Use std::map sorting of morton order to our advantage
     std::map<std::uint8_t, std::map<std::uint64_t, Node>> layeredTree;
 
     // Sort batches as leafes into the layeredTree
     std::uint8_t maxIteration = 0;
     std::uint32_t offset = 0;
+    std::uint32_t pointCount = 0;
     for (const auto& batch : originalBatches) {
-        originalPoints.insert(originalPoints.end(), batch.points.begin(), batch.points.end());
+        pointCount += static_cast<std::uint32_t>(batch.points.size());
         layeredTree[batch.mortonOrder.iteration][batch.mortonOrder.code] = {
             batch.box, offset, static_cast<std::uint32_t>(batch.points.size()), 0};
         offset += static_cast<std::uint32_t>(batch.points.size());
@@ -108,13 +106,13 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
     // Pull up MaxBatchSize many random points from children as LOD for each node, proceed top down
     std::vector<Node> batchNodes;
     std::vector<Point> points;
-    batchNodes.reserve(originalPoints.size() / MaxBatchSize + 1);
-    points.reserve(originalPoints.size());
+    batchNodes.reserve(pointCount / MaxBatchSize + 1);
+    points.reserve(pointCount);
     for (std::uint8_t i = rootLevel; i <= maxIteration; ++i) {
         auto& layer = layeredTree[i];
         for (auto& [code, node] : layer) {
             // Pull points from leaf level
-            auto sampledPoints = SampleLeafs(MaxBatchSize, code, i, originalBatches, originalPoints);
+            auto sampledPoints = SampleLeafs(MaxBatchSize, code, i, originalBatches);
             if (sampledPoints.empty()) {
                 continue;
             }
