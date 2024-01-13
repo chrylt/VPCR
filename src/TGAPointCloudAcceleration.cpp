@@ -146,6 +146,10 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
             node.pointCount = points.size() - node.pointOffset;
             node.box = std::move(box);
             node.childrenPointer = 0;  // Set to 0 until first child sets it active
+
+            // Due to children being sorted by morton code in the map, we are guaranteed that all children of a parent
+            // are pushed back after another, hence having a single child pointer to the first child in the parent is
+            // sufficient and no further sorting is necessary
             batchNodes.push_back(node);
         }
     }
