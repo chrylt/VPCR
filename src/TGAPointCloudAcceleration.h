@@ -25,13 +25,6 @@ public:
     ~TGAPointCloudAcceleration();
 
 private:
-    struct BatchesCompressed {
-        std::vector<CompressedPosition> lowPrecisions;
-        std::vector<CompressedPosition> mediumPrecisions;
-        std::vector<CompressedPosition> highPrecisions;
-        std::vector<CompressedColor> colors;
-    };
-
     tga::Interface &backend_;
 
     std::uint32_t batchCount_;
@@ -39,6 +32,4 @@ private:
     PointBuffers pointsBufferPack_;
     tga::Buffer accelerationBuffer_;
     tga::Buffer batchesBuffer_;
-
-    static BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch> &batches);
 };

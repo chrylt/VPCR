@@ -2,6 +2,55 @@
 
 #include "Utils.h"
 
+namespace
+{
+struct BatchesCompressed {
+    std::vector<CompressedPosition> lowPrecisions;
+    std::vector<CompressedPosition> mediumPrecisions;
+    std::vector<CompressedPosition> highPrecisions;
+    std::vector<CompressedColor> colors;
+};
+
+BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch>& batches)
+{
+    std::vector<CompressedPosition> lowPrecisions;
+    std::vector<CompressedPosition> mediumPrecisions;
+    std::vector<CompressedPosition> highPrecisions;
+    std::vector<CompressedColor> colors;
+
+    for (const auto& [aabb, points] : batches) {
+        for (const auto& [position, color] : points) {
+            // Compress position and split into multiple buffers
+            const glm::vec3 floatPos = position;
+            const glm::vec3 aabbSize = aabb.maxV - aabb.minV;
+
+            // convert float position to 30-bit fixed precision relative to BB
+            const auto x30 =
+                std::min(static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.x - aabb.minV.x) / aabbSize.x)),
+                         static_cast<std::uint32_t>((1 << 30) - 1));
+            const auto y30 =
+                std::min(static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.y - aabb.minV.y) / aabbSize.y)),
+                         static_cast<std::uint32_t>((1 << 30) - 1));
+            const auto z30 =
+                std::min(static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.z - aabb.minV.z) / aabbSize.z)),
+                         static_cast<std::uint32_t>((1 << 30) - 1));
+
+            lowPrecisions.emplace_back((x30 >> 20) & 0x3FF, (y30 >> 20) & 0x3FF, (z30 >> 20) & 0x3FF,
+                                       0);  // take upmost 10 bit of each coordinate as low precision
+            mediumPrecisions.emplace_back((x30 >> 10) & 0x3FF, (y30 >> 10) & 0x3FF, (z30 >> 10) & 0x3FF,
+                                          0);  // take next lower 10 bit as medium precision
+            highPrecisions.emplace_back(x30 & 0x3FF, y30 & 0x3FF, z30 & 0x3FF,
+                                        0);  // take lowest 10 bit as high precision
+
+            // Pass on colors
+            colors.emplace_back(color);
+        }
+    }
+
+    return {lowPrecisions, mediumPrecisions, highPrecisions, colors};
+}
+}  // namespace
+
 TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const std::string_view scenePath)
     : backend_(tgai)
 {
@@ -24,7 +73,7 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
         auto *stagingPointer = backend_.getMapping(staging);
 
         const tga::BufferInfo bufferInfo{tga::BufferUsage::storage, entrySize, staging};
-        
+
         // Low Precision
         std::memcpy(stagingPointer, lowPrecisions.data(), entrySize);
         pointsBufferPack_.positionLowPrecision = backend_.createBuffer(bufferInfo);
@@ -94,44 +143,4 @@ TGAPointCloudAcceleration::~TGAPointCloudAcceleration()
     backend_.free(pointsBufferPack_.colors);
     backend_.free(batchesBuffer_);
     backend_.free(accelerationBuffer_);
-}
-
-TGAPointCloudAcceleration::BatchesCompressed TGAPointCloudAcceleration::ConvertToAdaptivePrecision(const std::vector<Batch>
-    &batches)
-{
-    std::vector<CompressedPosition> lowPrecisions;
-    std::vector<CompressedPosition> mediumPrecisions;
-    std::vector<CompressedPosition> highPrecisions;
-    std::vector<CompressedColor> colors;
-
-    for (const auto&[aabb, points] : batches) {
-        for (const auto&[position, color] : points) {
-            // Compress position and split into multiple buffers
-            const glm::vec3 floatPos = position;
-            const glm::vec3 aabbSize = aabb.maxV - aabb.minV;
-
-            // convert float position to 30-bit fixed precision relative to BB
-            const auto x30 = std::min(
-                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.x - aabb.minV.x) / aabbSize.x)),
-                static_cast<std::uint32_t>((1 << 30) - 1));
-            const auto y30 = std::min(
-                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.y - aabb.minV.y) / aabbSize.y)),
-                static_cast<std::uint32_t>((1 << 30) - 1));
-            const auto z30 = std::min(
-                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.z - aabb.minV.z) / aabbSize.z)),
-                static_cast<std::uint32_t>((1 << 30) - 1));
-
-            lowPrecisions.emplace_back((x30 >> 20) & 0x3FF, (y30 >> 20) & 0x3FF, (z30 >> 20) & 0x3FF,
-                                       0);  // take upmost 10 bit of each coordinate as low precision
-            mediumPrecisions.emplace_back((x30 >> 10) & 0x3FF, (y30 >> 10) & 0x3FF, (z30 >> 10) & 0x3FF,
-                                          0);  // take next lower 10 bit as medium precision
-            highPrecisions.emplace_back(x30 & 0x3FF, y30 & 0x3FF, z30 & 0x3FF,
-                                        0);  // take lowest 10 bit as high precision
-
-            // Pass on colors
-            colors.emplace_back(color);
-        }
-    }
-    
-    return {lowPrecisions, mediumPrecisions, highPrecisions, colors};
 }
