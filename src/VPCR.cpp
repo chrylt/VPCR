@@ -10,8 +10,8 @@
 namespace
 {
 // Should match compute shaders
-constexpr std::uint32_t ComputeLaneCount = 128;
-constexpr std::uint32_t WorkerCount = 1536;  // TODO: get hardware thread count + heuristic
+constexpr std::uint32_t ComputeLaneCount = 32;
+constexpr std::uint32_t WorkerCount = 1471 * 64;  // TODO: get hardware thread count + heuristic
 
 class VPCRImpl final : public VPCR {
 public:
@@ -28,6 +28,8 @@ private:
 
     struct Pipeline {
         tga::Buffer batchList;
+        tga::Buffer statistics;
+        tga::StagingBuffer statisticsDownload;
         tga::Texture renderTarget;
         tga::Texture depthBuffer;
         std::unique_ptr<TGAComputePass> clearPass;
@@ -43,6 +45,10 @@ private:
         std::uint32_t threadCount;
     };
 
+    struct Statistics {
+        std::uint32_t drawnBatches;
+    };
+
     void OnUpdate(std::uint32_t frameIndex);
     void OnRender(std::uint32_t frameIndex);
 
@@ -50,6 +56,7 @@ private:
     void CreateBatchList();
     void CreateRenderTarget();
     void CreateDepthBuffer();
+    void CreateStatisticsReadbackBuffer();
 
     void CreateClearPass();
     void CreateLODPass();
@@ -106,6 +113,7 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     CreateBatchList();
     CreateRenderTarget();
     CreateDepthBuffer();
+    CreateStatisticsReadbackBuffer();
 
     // Create Passes
     CreateClearPass();
@@ -132,12 +140,16 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
 
     ++frameCounter_;
 
-    // Print FPS on window title
+    // Print FPS and statistics on window title
     {
+        const auto* statistics =
+            reinterpret_cast<const Statistics *>(backend_.getMapping(pipelines_[frameIndex].statisticsDownload));
         if ((currentTime - lastTitleUpdate_).count() / 1000000000.f >= 1.f) {
             lastTitleUpdate_ = std::chrono::high_resolution_clock::now();
 
-            backend_.setWindowTitle(window_, "VPCR, Framerate: " + std::to_string(frameCounter_) + " FPS");
+            backend_.setWindowTitle(window_, "VPCR, Framerate: " + std::to_string(frameCounter_) +
+                                                 " FPS, Drawn batches: " + std::to_string(statistics->drawnBatches) +
+                                                 "/" + std::to_string(pointCloudAcceleration_->GetBatchCount()));
             frameCounter_ = 0;
         }
     }
@@ -199,6 +211,10 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
     auto& displayPass = pipelines_[frameIndex].displayPass;
 
     auto commandRecorder = tga::CommandRecorder{backend_, commandBuffer};
+
+    // Readback
+    commandRecorder.bufferDownload(pipelines_[frameIndex].statistics, pipelines_[frameIndex].statisticsDownload,
+                                   sizeof(Statistics));
 
     // Upload
     camera_->Upload(commandRecorder);
@@ -278,6 +294,16 @@ void VPCRImpl::CreateDepthBuffer()
     }
 }
 
+void VPCRImpl::CreateStatisticsReadbackBuffer()
+{
+    for (auto& pipeline : pipelines_) {
+        tga::StagingBufferInfo stagingInfo{sizeof(Statistics)};
+        pipeline.statisticsDownload = backend_.createStagingBuffer(stagingInfo);
+        const tga::BufferInfo info{tga::BufferUsage::storage, sizeof(Statistics), pipeline.statisticsDownload};
+        pipeline.statistics = backend_.createBuffer(info);
+    }
+}
+
 void VPCRImpl::CreateClearPass()
 {
     for (auto& pipeline : pipelines_) {
@@ -332,14 +358,18 @@ void VPCRImpl::CreateProjectionPass()
         const auto computeShader =
             tga::loadShader("../shaders/projection_comp.spv", tga::ShaderType::compute, backend_);
 
-        const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
-                                            {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
-                                            // Set = 1: Rendertarget, Depthbuffer
-                                            {{{tga::BindingType::storageImage}, {tga::BindingType::storageImage}}},
-                                            // Set = 2: Points
-                                            {{{tga::BindingType::storageBuffer}}},
-                                            // Set = 3: Batches, Batch list
-                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}}});
+        const tga::InputLayout inputLayout({
+            // Set = 0: Camera, DynamicConst
+            {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
+            // Set = 1: Rendertarget, Depthbuffer
+            {{{tga::BindingType::storageImage}, {tga::BindingType::storageImage}}},
+            // Set = 2: Points
+            {{{tga::BindingType::storageBuffer}}},
+            // Set = 3: Batches, Batch list
+            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}},
+            // Set = 4: Statistics
+            {{{tga::BindingType::storageBuffer}}},
+        });
 
         const tga::ComputePassInfo passInfo(computeShader, inputLayout);
         projectionPass = std::make_unique<TGAComputePass>(backend_, passInfo);
@@ -351,6 +381,7 @@ void VPCRImpl::CreateProjectionPass()
         projectionPass->BindInput(pointCloudAcceleration_->GetPointsBuffer(), 2);
         projectionPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 3, 0);
         projectionPass->BindInput(pipeline.batchList, 3, 1);
+        projectionPass->BindInput(pipeline.statistics, 4, 0);
     }
 }
 

@@ -29,6 +29,6 @@ struct Batch {
     std::vector<Point> points;
 };
 
-constexpr std::uint32_t MaxBatchSize = 64;
+constexpr std::uint32_t MaxBatchSize = 256;
 
 std::vector<Batch> LoadScene(std::string_view scene);

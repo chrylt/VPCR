@@ -38,7 +38,16 @@ layout(set = 1, binding = 1) buffer BatchList{
     uint batchList[];
 };
 
-layout(local_size_x = 128) in;
+layout(local_size_x = 32) in;
+
+// Taken from https://www.shadertoy.com/view/ssyyDh
+float cbrt(const float x)
+{
+    float y = uintBitsToFloat(709973695u+floatBitsToUint(x)/3u);
+    y = y*(2.0/3.0) + (1.0/3.0)*x/(y*y);
+    y = y*(2.0/3.0) + (1.0/3.0)*x/(y*y);
+    return y;
+}
 
 void main(){
     // TODO: @Atzubi
@@ -55,6 +64,7 @@ void main(){
             continue;
         }
 
+        // TODO: traverse tree instead of processing all nodes
         const Node batchNode = nodes[i];
     
         const vec3[8] aabbCorners = vec3[](
@@ -74,15 +84,19 @@ void main(){
             if((-corner.w <= corner.x) && (corner.x <= corner.w) &&
                (-corner.w <= corner.y) && (corner.y <= corner.w) &&
                (0.f <= corner.z) && (corner.z <= corner.w)){
-                isVisible = true;   
+                isVisible = true;
             }
         }
     
+        // Frustum culling
         if (isVisible){
-            const uint currentBatchCount = atomicAdd(batchCount, 1);
-            batchList[currentBatchCount] = i;
-
-            // TODO: Add LOD selection
+            const float distance = cbrt(length(camera.position - (aabbCorners[0] + (aabbCorners[7] - aabbCorners[0])/2.f)));
+            const float boxSize = length(aabbCorners[7] - aabbCorners[0]) * 1.5f; // TODO: figure out the correct factor
+            // LOD selection
+            if (boxSize > distance){
+                const uint currentBatchCount = atomicAdd(batchCount, 1);
+                batchList[currentBatchCount] = i;
+            }
         }
     }
 }

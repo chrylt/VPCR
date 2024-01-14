@@ -52,7 +52,11 @@ layout(set = 3, binding = 1) readonly buffer BatchList{
     uint batchList[];
 };
 
-layout(local_size_x = 128) in;
+layout(set = 4, binding = 0) writeonly buffer Statistics{
+    uint drawnBatches;
+};
+
+layout(local_size_x = 32) in;
 
 void main(){
     // TODO: @Chrylt
@@ -92,4 +96,6 @@ void main(){
             }
         }
     }
+
+    drawnBatches = batchCount;
 }

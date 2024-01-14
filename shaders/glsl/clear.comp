@@ -17,7 +17,7 @@ layout(set = 0, binding = 1) uniform DynamicConst{
 layout(set = 1, binding = 0, r32ui) writeonly uniform uimage2D renderTarget;
 layout(set = 1, binding = 1, r32ui) writeonly uniform uimage2D depthBuffer;
 
-layout(local_size_x = 128) in;
+layout(local_size_x = 32) in;
 
 void main()
 {
