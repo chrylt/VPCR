@@ -60,8 +60,7 @@ layout(set = 3, binding = 1) readonly buffer BatchList{
 
 layout(local_size_x = 128) in;
 
-vec3 getPointPosition(const Batch currBatch, const uint pointIdx){
-
+uint getBatchPixelExtend(const Batch currBatch){
     // determine precision by projecting batch aabb to screen
     /// create aabb corner points
     const vec3[8] aabbCorners = vec3[](
@@ -79,7 +78,7 @@ vec3 getPointPosition(const Batch currBatch, const uint pointIdx){
     uvec2 screenMin = camera.resolution;
     uvec2 screenMax = uvec2(0);
 
-    for(uint i=0; i < 8; i++){
+    for(uint i = 0; i < 8; ++i){
         /// transform aabb & perspective divide
         const vec4 divReady = camera.projection * camera.view * vec4(aabbCorners[i], 1);
         const vec2 divided = (divReady / abs(divReady.w)).xy;
@@ -90,27 +89,29 @@ vec3 getPointPosition(const Batch currBatch, const uint pointIdx){
     }
 
     const uint pixelExtend = max(screenMax.x - screenMin.x, screenMax.y - screenMin.y);
+    return pixelExtend;
+}
 
-    // create coordinate at precision level
-    const vec3 boxSize = currBatch.box.maxV - currBatch.box.minV;
-    vec3 resultPosition = currBatch.box.minV;
+vec3 getAdaptivePointPosition(const vec3 batchBoxSize, const vec3 batchBoxMin, const uint batchPixelExtend, const uint pointIdx){
+
+    vec3 resultPosition = batchBoxMin;
 
     /// low precision
     const uint encodedLow = pointsPosLow[pointIdx];
-    const vec3 offsetLow = vec3(encodedLow & 0x3FF, (encodedLow >> 10) & 0x3FF, (encodedLow >> 20) & 0x3FF) / (1 << 10) * boxSize;
+    const vec3 offsetLow = vec3(encodedLow & 0x3FF, (encodedLow >> 10) & 0x3FF, (encodedLow >> 20) & 0x3FF) / (1 << 10) * batchBoxSize;
     resultPosition += offsetLow;
 
-    if(pixelExtend > 512) { // 2^(10 bits) = 1024 different values; can accurately display BB across 512 pixels
+    if(batchPixelExtend > 512) { // 2^(10 bits) = 1024 different values; can accurately display BB across 512 pixels
         /// add medium precision
         const uint encodedMedium = pointsPosMedium[pointIdx];
-        const vec3 offsetMedium = vec3(encodedMedium & 0x3FF, (encodedMedium >> 10) & 0x3FF, (encodedMedium >> 20) & 0x3FF) / (1 << 20) * boxSize;
+        const vec3 offsetMedium = vec3(encodedMedium & 0x3FF, (encodedMedium >> 10) & 0x3FF, (encodedMedium >> 20) & 0x3FF) / (1 << 20) * batchBoxSize;
         resultPosition += offsetMedium;
     }
 
-    if(pixelExtend > 524288) {  // 2^(20 bits) = 1'048'576 different values; can accurately display BB across 524'288 pixels
+    if(batchPixelExtend > 524288) {  // 2^(20 bits) = 1'048'576 different values; can accurately display BB across 524'288 pixels
         /// add high precision
         const uint encodedHigh = pointsPosHigh[pointIdx];
-        const vec3 offsetHigh = vec3(encodedHigh & 0x3FF, (encodedHigh >> 10) & 0x3FF, (encodedHigh >> 20) & 0x3FF) / (1 << 30) * boxSize;
+        const vec3 offsetHigh = vec3(encodedHigh & 0x3FF, (encodedHigh >> 10) & 0x3FF, (encodedHigh >> 20) & 0x3FF) / (1 << 30) * batchBoxSize;
         resultPosition += offsetHigh;
     }
 
@@ -128,17 +129,20 @@ void main(){
         return;
     }
 
-    uint workAmount = batchCount / workerCount;
+    const uint workAmount = uint(ceil(float(batchCount) / workerCount));
     const uint workOffset = workAmount * id;
-    if (id == workerCount - 1){
-        workAmount = batchCount - workAmount * workerCount;
-    }
-    
+
     for (uint i = workOffset; i < workOffset + workAmount; ++i){
+        if (i >= batchCount){
+            continue;
+        }
         const Batch batch = batches[batchList[i]];
+        const vec3 batchBBSize = batch.box.maxV - batch.box.minV;
+        const uint batchPixelExtend = getBatchPixelExtend(batch);
+
         for (uint k = batch.pointOffset; k < batch.pointOffset + batch.pointCount; ++k){
 
-            const vec4 projected = camera.projection * camera.view * vec4(getPointPosition(batch, k), 1);
+            const vec4 projected = camera.projection * camera.view * vec4(getAdaptivePointPosition(batchBBSize, batch.box.minV, batchPixelExtend, k), 1);
 
             if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
                     (-projected.w <= projected.y) && (projected.y <= projected.w) &&

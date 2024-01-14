@@ -112,7 +112,7 @@ std::vector<Batch> LoadScene(const std::string_view scene)
     // Vertex order optimization
 
     // Create dummy batches until we have vertex order optimization
-    constexpr auto maxBatchSize = 4;
+    constexpr auto maxBatchSize = 256;
     const auto points = LoadScenePoints(scene);
     auto iterator = points.begin();
 
