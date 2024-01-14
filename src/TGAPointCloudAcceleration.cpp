@@ -18,10 +18,15 @@ BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch>& batches)
     std::vector<CompressedPosition> highPrecisions;
     std::vector<CompressedColor> colors;
 
+    lowPrecisions.reserve(batches.size() * MaxBatchSize);
+    mediumPrecisions.reserve(batches.size() * MaxBatchSize);
+    highPrecisions.reserve(batches.size() * MaxBatchSize);
+    colors.reserve(batches.size() * MaxBatchSize);
+
     for (const auto& [aabb, points] : batches) {
         for (const auto& [position, color] : points) {
             // Compress position and split into multiple buffers
-            const glm::vec3 floatPos = position;
+            const glm::vec3& floatPos = position;
             const glm::vec3 aabbSize = aabb.maxV - aabb.minV;
 
             // convert float position to 30-bit fixed precision relative to BB

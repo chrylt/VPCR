@@ -118,10 +118,6 @@ vec3 getAdaptivePointPosition(const vec3 batchBoxSize, const vec3 batchBoxMin, c
     return resultPosition;
 }
 
-uint getPointColor(uint idx){
-    return pointsRgba[idx];
-}
-
 void main(){
 
     const uint id = gl_GlobalInvocationID.x;
@@ -156,7 +152,7 @@ void main(){
                 const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
 
                 if(depth < oldValue){
-	                imageAtomicExchange(renderTarget, ivec2(coords), getPointColor(k));
+	                imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
                 }
             }
         }
