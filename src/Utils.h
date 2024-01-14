@@ -4,12 +4,25 @@
 #include <string_view>
 #include <vector>
 
-struct Point {
-    glm::vec3 position;
+constexpr auto MaxBatchSize = 256;
+
+struct CompressedPosition {
+    std::uint32_t x : 10;
+    std::uint32_t y : 10;
+    std::uint32_t z : 10;
+    std::uint32_t padding : 2;
+};
+
+struct CompressedColor {
     std::uint32_t r : 8;
     std::uint32_t g : 8;
     std::uint32_t b : 8;
     std::uint32_t a : 8;
+};
+
+struct Point {
+    glm::vec3 position;
+    CompressedColor color;
 };
 
 struct AABB {

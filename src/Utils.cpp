@@ -86,10 +86,10 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
                         glm::vec4 fColor;
                         memcpy(&fColor, &buffer[bufferOffset + i * stride], stride);
                         
-                        points[currentPointCount + i].r = static_cast<std::uint8_t>(fColor.r * 255);
-                        points[currentPointCount + i].g = static_cast<std::uint8_t>(fColor.g * 255);
-                        points[currentPointCount + i].b = static_cast<std::uint8_t>(fColor.b * 255);
-                        points[currentPointCount + i].a = 255;
+                        points[currentPointCount + i].color.r = static_cast<std::uint8_t>(fColor.r * 255);
+                        points[currentPointCount + i].color.g = static_cast<std::uint8_t>(fColor.g * 255);
+                        points[currentPointCount + i].color.b = static_cast<std::uint8_t>(fColor.b * 255);
+                        points[currentPointCount + i].color.a = 255;
                     }
                 }
             }
@@ -112,15 +112,14 @@ std::vector<Batch> LoadScene(const std::string_view scene)
     // Vertex order optimization
 
     // Create dummy batches until we have vertex order optimization
-    constexpr auto maxBatchSize = 4;
     const auto points = LoadScenePoints(scene);
     auto iterator = points.begin();
 
     std::vector<Batch> batches;
-    batches.reserve(points.size() / maxBatchSize + 1);
+    batches.reserve(points.size() / MaxBatchSize + 1);
     while (iterator != points.end()) {
         auto& batch = batches.emplace_back();
-        batch.points.reserve(maxBatchSize);
+        batch.points.reserve(MaxBatchSize);
 
         AABB box{
             {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
@@ -128,7 +127,7 @@ std::vector<Batch> LoadScene(const std::string_view scene)
             {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
              -std::numeric_limits<float>::infinity()},
         };
-        for (std::uint32_t i = 0; i < maxBatchSize; ++i) {
+        for (std::uint32_t i = 0; i < MaxBatchSize; ++i) {
             if (iterator == points.end()) {
                 break;
             }
