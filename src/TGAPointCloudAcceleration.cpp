@@ -15,7 +15,9 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
         const auto [lowPrecisions, mediumPrecisions, highPrecisions, colors] = ConvertToAdaptivePrecision(batches);
 
         const size_t numberOfPoints = lowPrecisions.size();
-        const size_t entrySize = numberOfPoints * sizeof(CompressedPosition); // sizeof(CompressedPosition) == sizeof(CompressedColor)
+
+        static_assert(sizeof(CompressedPosition) == sizeof(CompressedColor));
+        const size_t entrySize = numberOfPoints * sizeof(CompressedPosition);
 
         const tga::StagingBufferInfo stagingInfo{entrySize};
         const tga::StagingBuffer staging = backend_.createStagingBuffer(stagingInfo);
@@ -24,19 +26,19 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
         const tga::BufferInfo bufferInfo{tga::BufferUsage::storage, entrySize, staging};
         
         // Low Precision
-        std::memcpy(stagingPointer, reinterpret_cast<const void *>(lowPrecisions.data()), entrySize);
+        std::memcpy(stagingPointer, lowPrecisions.data(), entrySize);
         pointsBufferPack_.positionLowPrecision = backend_.createBuffer(bufferInfo);
 
         // Medium Precision
-        std::memcpy(stagingPointer, reinterpret_cast<const void *>(mediumPrecisions.data()), entrySize);
+        std::memcpy(stagingPointer, mediumPrecisions.data(), entrySize);
         pointsBufferPack_.positionMediumPrecision = backend_.createBuffer(bufferInfo);
 
         // High Precision
-        std::memcpy(stagingPointer, reinterpret_cast<const void *>(highPrecisions.data()), entrySize);
+        std::memcpy(stagingPointer, highPrecisions.data(), entrySize);
         pointsBufferPack_.positionHighPrecision = backend_.createBuffer(bufferInfo);
 
         // Colors
-        std::memcpy(stagingPointer, reinterpret_cast<const void *>(colors.data()), entrySize);
+        std::memcpy(stagingPointer, colors.data(), entrySize);
         pointsBufferPack_.colors = backend_.createBuffer(bufferInfo);
 
         backend_.free(staging);
@@ -94,28 +96,29 @@ TGAPointCloudAcceleration::~TGAPointCloudAcceleration()
     backend_.free(accelerationBuffer_);
 }
 
-TGAPointCloudAcceleration::BatchesCompressed TGAPointCloudAcceleration::ConvertToAdaptivePrecision(std::vector<Batch> batches) const
+TGAPointCloudAcceleration::BatchesCompressed TGAPointCloudAcceleration::ConvertToAdaptivePrecision(const std::vector<Batch>
+    &batches)
 {
     std::vector<CompressedPosition> lowPrecisions;
     std::vector<CompressedPosition> mediumPrecisions;
     std::vector<CompressedPosition> highPrecisions;
     std::vector<CompressedColor> colors;
 
-    for (auto& batch : batches) {
-        for (auto& point : batch.points) {
+    for (const auto&[aabb, points] : batches) {
+        for (const auto&[position, color] : points) {
             // Compress position and split into multiple buffers
-            const glm::vec3 floatPos = point.position;
-            const glm::vec3 aabbSize = batch.aabb.maxV - batch.aabb.minV;
+            const glm::vec3 floatPos = position;
+            const glm::vec3 aabbSize = aabb.maxV - aabb.minV;
 
             // convert float position to 30-bit fixed precision relative to BB
             const auto x30 = std::min(
-                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.x - batch.aabb.minV.x) / aabbSize.x)),
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.x - aabb.minV.x) / aabbSize.x)),
                 static_cast<std::uint32_t>((1 << 30) - 1));
             const auto y30 = std::min(
-                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.y - batch.aabb.minV.y) / aabbSize.y)),
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.y - aabb.minV.y) / aabbSize.y)),
                 static_cast<std::uint32_t>((1 << 30) - 1));
             const auto z30 = std::min(
-                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.z - batch.aabb.minV.z) / aabbSize.z)),
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.z - aabb.minV.z) / aabbSize.z)),
                 static_cast<std::uint32_t>((1 << 30) - 1));
 
             lowPrecisions.emplace_back((x30 >> 20) & 0x3FF, (y30 >> 20) & 0x3FF, (z30 >> 20) & 0x3FF,
@@ -126,7 +129,7 @@ TGAPointCloudAcceleration::BatchesCompressed TGAPointCloudAcceleration::ConvertT
                                         0);  // take lowest 10 bit as high precision
 
             // Pass on colors
-            colors.emplace_back(std::move(point.color));
+            colors.emplace_back(color);
         }
     }
     

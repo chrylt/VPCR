@@ -40,5 +40,5 @@ private:
     tga::Buffer accelerationBuffer_;
     tga::Buffer batchesBuffer_;
 
-    BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch> batches) const;
+    static BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch> &batches);
 };
