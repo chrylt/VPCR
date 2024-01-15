@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <string_view>
 #include <vector>
+#include <span>
 
 class Point {
 public:
@@ -12,7 +13,7 @@ public:
     std::uint32_t b : 8;
     std::uint32_t a : 8;
 
-    bool operator<(Point q) { 
+    const bool operator<(const Point q) const { 
         return this->mortonIndex() < q.mortonIndex(); 
     }
 
@@ -29,27 +30,20 @@ struct AABB {
     alignas(16) glm::vec3 maxV;
 };
 
-class BatchInfo {
+class Batch {
 public:
-    bool leaf = false;
+    std::uint64_t mortonCode : 57;
+    std::uint64_t iteration : 5;
+    std::uint64_t leaf : 1;
 
-    std::uint32_t iteration = 0U;
-    std::uint64_t mortonCode = 0ULL;
-
-    std::uint32_t count = 0U;
-    std::uint32_t startId = 0U;
-
-    const Point *points = nullptr;
-    const std::uint32_t maxBatchCount = 0U;
-
-    BatchInfo(auto _maxBatchCount, auto _iteration, auto _mortonCode, auto _count, auto _points);
-
-    std::vector<BatchInfo> Subdivide();
-};
-
-struct Batch {
     AABB aabb;
-    std::vector<Point> points;
+    std::span<Point> points;
+
+    Batch();
+    Batch(auto _iteration, auto _mortonCode, auto _points);
+
+    std::vector<Batch> Subdivide(const std::uint32_t maxBatchCount);
+    const std::uint32_t MortonToNodeID(const std::uint64_t mortonCode) const;
 };
 
-std::vector<Batch> LoadScene(std::string_view scene);
+std::vector<Batch> LoadScene(std::string_view scene, std::vector<Point>& points);

@@ -7,18 +7,14 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
 {
     // TODO: @Atzubi
 
-    const auto batches = LoadScene(scenePath);
+    std::vector<Point> points;
+    const auto batches = LoadScene(scenePath, points);
     batchCount_ = static_cast<std::uint32_t>(batches.size());
 
     // Create some dummy buffers until we have an acceleration structure
 
     // Create buffer for points
     {
-        std::vector<Point> points;
-        for (const auto& batch : batches) {
-            points.insert(points.end(), batch.points.begin(), batch.points.end());
-        }
-
         const tga::StagingBufferInfo stagingInfo{points.size() * sizeof(Point),
                                                  reinterpret_cast<const std::uint8_t *>(points.data())};
         const tga::StagingBuffer staging = backend_.createStagingBuffer(stagingInfo);

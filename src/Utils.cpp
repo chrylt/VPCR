@@ -103,48 +103,21 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
 
     return points;
 }
+
+
 }  // namespace
 
-std::vector<Batch> LoadScene(const std::string_view scene) {
-    auto points = LoadScenePoints(scene);
+std::vector<Batch> LoadScene(std::string_view scene, std::vector<Point>& points)
+{
+    points = LoadScenePoints(scene);
+
     //TODO add a hashmap for morton code to make this faster or 
     //Implement this https://ieeexplore.ieee.org/document/5383353
     std::sort(points.begin(), points.end());
 
-    constexpr auto maxBatchSize = 12;
-    auto batchInfo = BatchInfo(maxBatchSize, 0U, 0ULL, points.size(), points.data());
-    auto batchInfos = batchInfo.Subdivide();
-
-    //TODO batches should be now adjusted to not contain partial pieces of data
-    //just indicies from points array which is availble in batch info
-    std::vector<Batch> batches;
-    batches.reserve(points.size() / maxBatchSize + 1);
-    for (auto& batchInfo : batchInfos) {
-        if (!batchInfo.leaf || batchInfo.count == 0) {
-            continue;
-        }
-
-        auto& batch = batches.emplace_back();
-        batch.points.reserve(batchInfo.count);
-
-        AABB box{
-            {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-                std::numeric_limits<float>::infinity()},
-            {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-                -std::numeric_limits<float>::infinity()},
-        };
-
-        for (std::uint32_t i = batchInfo.startId; i < batchInfo.startId + batchInfo.count; ++i) {
-            Point& p = points[i];
-            box.minV = glm::min(box.minV, p.position);
-            box.maxV = glm::max(box.maxV, p.position);
-
-            batch.points.push_back(p);
-        }
-        batch.aabb = box;
-    }
-
-    return batches;
+    constexpr auto maxBatchSize = 4;
+    auto batch = Batch(0U, 0ULL, std::span(points));
+    return batch.Subdivide(maxBatchSize);
 }
 
 std::uint64_t Point::mortonIndex() const {
@@ -194,47 +167,79 @@ std::uint64_t Point::mortonIndex() const {
     return xx | (yy << 1U) | (zz << 2U);
 }
 
-BatchInfo::BatchInfo(auto _maxBatchCount, auto _iteration, auto _mortonCode, auto _count, auto _points)
-    : maxBatchCount(_maxBatchCount), iteration(_iteration), mortonCode(_mortonCode), count(_count), points(_points) {
-    leaf = false;
+Batch::Batch() : points(std::span<Point>()), iteration(0), mortonCode(0), leaf(false)
+{
+    aabb = {
+        {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
+         std::numeric_limits<float>::infinity()},
+        {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+         -std::numeric_limits<float>::infinity()},
+    };
+};
+
+Batch::Batch(auto _iteration, auto _mortonCode, auto _points)
+    : points(_points), iteration(_iteration), mortonCode(_mortonCode), leaf(false)
+{
+    aabb = {
+        {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
+         std::numeric_limits<float>::infinity()},
+        {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+         -std::numeric_limits<float>::infinity()},
+    };
 }
 
-std::vector<BatchInfo> BatchInfo::Subdivide() {
-    std::vector<BatchInfo> children;
+std::vector<Batch> Batch::Subdivide(const std::uint32_t maxBatchCount)
+{
+    std::vector<Batch> result;
 
-    if (count < maxBatchCount) {
+    if (points.size() < maxBatchCount) {
         leaf = true;
-    } else {
-        for (size_t i = 0; i < 8; i++) {
-            children.push_back(
-                BatchInfo(maxBatchCount, iteration + 1, i << (60 - iteration * 3) | mortonCode, 0U, points));
+        result.push_back(*this);
+    } 
+    else {
+        std::array<Batch, 8> children;
+        for (size_t i = 0; i < children.size(); i++) {
+            children[i] = Batch(iteration + 1, i << (54U - iteration * 3U) | mortonCode, points.subspan(0, 0));
         }
 
         // splitting points into octree nodes
-        auto oldChild = ~0U;
-        for (auto i = startId; i < startId + count; i++) {
-            auto currentChild = static_cast<std::uint32_t>((points[i].mortonIndex() >> (60U - iteration * 3U)) & 0x7U);
+        auto prevNodeStartIT = points.begin();
+        auto prevPointNodeID = MortonToNodeID(points.begin()->mortonIndex());                 
+        for (auto it = points.begin(); it != points.end(); ++it) {
+            const auto currPointNodeID = MortonToNodeID(it->mortonIndex());
 
-            if (oldChild != currentChild) {
-                children[currentChild].startId = i;
-                oldChild = currentChild;
+            auto& box = children[currPointNodeID].aabb;
+            box.minV = glm::min(box.minV, it->position);
+            box.maxV = glm::max(box.maxV, it->position);
+
+            // if NodeID changed or first run
+            if (prevPointNodeID != currPointNodeID || it == prevNodeStartIT) {
+                children[prevPointNodeID].points = std::span<Point>(prevNodeStartIT, it);
+                children[currPointNodeID].points = std::span<Point>(it, points.end());
+
+                prevNodeStartIT = it;
+                prevPointNodeID = currPointNodeID;
             }
-            children[currentChild].count++;
         }
 
-        for (auto i = 0; i < 8; i++) {
-            auto res = children[i].Subdivide();
+        //filter subdivide results
+        for (auto i = 0; i < children.size(); i++) {
+            auto res = children[i].Subdivide(maxBatchCount);
 
-            // return just the leafs
+            // return just leafs and non-empty nodes
             for (auto& node : res) {
-                if (!node.leaf || node.count == 0) {
+                if (!node.leaf || node.points.size() == 0) {
                     continue;
                 }
 
-                children.push_back(node);
+                result.push_back(node);
             }
         }
     }
 
-    return children;
+    return result;
+}
+
+const std::uint32_t Batch::MortonToNodeID(const std::uint64_t mortonCode) const {
+    return (mortonCode >> (60U - iteration * 3U)) & 0x7U;
 }
