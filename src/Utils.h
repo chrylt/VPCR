@@ -25,14 +25,14 @@ struct Point {
     glm::vec3 position;
     CompressedColor color;
 
-    const bool operator<(const Point q) const { return this->mortonIndex() < q.mortonIndex(); }
+    bool operator<(const Point q) const { return this->MortonIndex() < q.MortonIndex(); }
 
     // https://stackoverflow.com/questions/26856268/morton-index-from-2d-point-with-floats
     static_assert((sizeof(std::uint32_t) == sizeof(float)) && (sizeof(std::uint32_t) * CHAR_BIT == 32) &&
                       (sizeof(std::uint64_t) * CHAR_BIT == 64),
                   "We need 32-bit ints and floats, and 64-bit long longs!");
 
-    std::uint64_t mortonIndex() const;
+    std::uint64_t MortonIndex() const;
 };
 
 struct AABB {
@@ -53,7 +53,7 @@ public:
     Batch(auto _iteration, auto _mortonCode, auto _points);
 
     std::vector<Batch> Subdivide();
-    const std::uint32_t MortonToNodeID(const std::uint64_t mortonCode) const;
+    std::uint32_t MortonToNodeID(const std::uint64_t mortonCode) const;
 };
 
-std::vector<Batch> LoadScene(std::string_view scene, std::vector<Point>& points);
+std::vector<Batch> LoadScene(const std::string_view scene, std::vector<Point>& points);

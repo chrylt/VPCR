@@ -118,7 +118,7 @@ std::vector<Batch> LoadScene(std::string_view scene, std::vector<Point>& points)
     return batch.Subdivide();
 }
 
-std::uint64_t Point::mortonIndex() const
+std::uint64_t Point::MortonIndex() const
 {
     auto ix = reinterpret_cast<const std::uint32_t&>(position.x);
     auto iy = reinterpret_cast<const std::uint32_t&>(position.y);
@@ -176,8 +176,8 @@ Batch::Batch() : points(std::span<Point>()), iteration(0), mortonCode(0), leaf(f
     };
 };
 
-Batch::Batch(auto _iteration, auto _mortonCode, auto _points)
-    : points(_points), iteration(_iteration), mortonCode(_mortonCode), leaf(false)
+Batch::Batch(auto iteration, auto mortonCode, auto points)
+    : points(points), iteration(iteration), mortonCode(mortonCode), leaf(false)
 {
     aabb = {
         {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
@@ -202,9 +202,9 @@ std::vector<Batch> Batch::Subdivide()
 
         // splitting points into octree nodes
         auto prevNodeStartIT = points.begin();
-        auto prevPointNodeID = MortonToNodeID(points.begin()->mortonIndex());
+        auto prevPointNodeID = MortonToNodeID(points.begin()->MortonIndex());
         for (auto it = points.begin(); it != points.end(); ++it) {
-            const auto currPointNodeID = MortonToNodeID(it->mortonIndex());
+            const auto currPointNodeID = MortonToNodeID(it->MortonIndex());
 
             auto& box = children[currPointNodeID].aabb;
             box.minV = glm::min(box.minV, it->position);
@@ -226,7 +226,7 @@ std::vector<Batch> Batch::Subdivide()
 
             // return just leafs and non-empty nodes
             for (auto& node : res) {
-                if (!node.leaf || node.points.size() == 0) {
+                if (!node.leaf || node.points.empty()) {
                     continue;
                 }
 
@@ -238,7 +238,7 @@ std::vector<Batch> Batch::Subdivide()
     return result;
 }
 
-const std::uint32_t Batch::MortonToNodeID(const std::uint64_t mortonCode) const
+std::uint32_t Batch::MortonToNodeID(const std::uint64_t mortonCode) const
 {
     return (mortonCode >> (60U - iteration * 3U)) & 0x7U;
 }
