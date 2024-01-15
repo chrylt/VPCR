@@ -2,6 +2,60 @@
 
 #include "Utils.h"
 
+namespace
+{
+struct BatchesCompressed {
+    std::vector<CompressedPosition> lowPrecisions;
+    std::vector<CompressedPosition> mediumPrecisions;
+    std::vector<CompressedPosition> highPrecisions;
+    std::vector<CompressedColor> colors;
+};
+
+BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch>& batches)
+{
+    std::vector<CompressedPosition> lowPrecisions;
+    std::vector<CompressedPosition> mediumPrecisions;
+    std::vector<CompressedPosition> highPrecisions;
+    std::vector<CompressedColor> colors;
+
+    lowPrecisions.reserve(batches.size() * MaxBatchSize);
+    mediumPrecisions.reserve(batches.size() * MaxBatchSize);
+    highPrecisions.reserve(batches.size() * MaxBatchSize);
+    colors.reserve(batches.size() * MaxBatchSize);
+
+    for (const auto& batch : batches) {
+        for (const auto& [position, color] : batch.points) {
+            // Compress position and split into multiple buffers
+            const glm::vec3& floatPos = position;
+            const glm::vec3 aabbSize = batch.aabb.maxV - batch.aabb.minV;
+
+            // convert float position to 30-bit fixed precision relative to BB
+            const auto x30 = std::min(
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.x - batch.aabb.minV.x) / aabbSize.x)),
+                         static_cast<std::uint32_t>((1 << 30) - 1));
+            const auto y30 = std::min(
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.y - batch.aabb.minV.y) / aabbSize.y)),
+                         static_cast<std::uint32_t>((1 << 30) - 1));
+            const auto z30 = std::min(
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.z - batch.aabb.minV.z) / aabbSize.z)),
+                         static_cast<std::uint32_t>((1 << 30) - 1));
+
+            lowPrecisions.emplace_back((x30 >> 20) & 0x3FF, (y30 >> 20) & 0x3FF, (z30 >> 20) & 0x3FF,
+                                       0);  // take upmost 10 bit of each coordinate as low precision
+            mediumPrecisions.emplace_back((x30 >> 10) & 0x3FF, (y30 >> 10) & 0x3FF, (z30 >> 10) & 0x3FF,
+                                          0);  // take next lower 10 bit as medium precision
+            highPrecisions.emplace_back(x30 & 0x3FF, y30 & 0x3FF, z30 & 0x3FF,
+                                        0);  // take lowest 10 bit as high precision
+
+            // Pass on colors
+            colors.emplace_back(color);
+        }
+    }
+
+    return {lowPrecisions, mediumPrecisions, highPrecisions, colors};
+}
+}  // namespace
+
 TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const std::string_view scenePath)
     : backend_(tgai)
 {
@@ -11,15 +65,37 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
     const auto batches = LoadScene(scenePath, points);
     batchCount_ = static_cast<std::uint32_t>(batches.size());
 
-    // Create some dummy buffers until we have an acceleration structure
-
-    // Create buffer for points
+    // Create buffers for points
     {
-        const tga::StagingBufferInfo stagingInfo{points.size() * sizeof(Point),
-                                                 reinterpret_cast<const std::uint8_t *>(points.data())};
+        const auto [lowPrecisions, mediumPrecisions, highPrecisions, colors] = ConvertToAdaptivePrecision(batches);
+
+        const size_t numberOfPoints = lowPrecisions.size();
+
+        static_assert(sizeof(CompressedPosition) == sizeof(CompressedColor));
+        const size_t entrySize = numberOfPoints * sizeof(CompressedPosition);
+
+        const tga::StagingBufferInfo stagingInfo{entrySize};
+
         const tga::StagingBuffer staging = backend_.createStagingBuffer(stagingInfo);
-        const tga::BufferInfo info{tga::BufferUsage::storage, points.size() * sizeof(Point), staging};
-        pointsBuffer_ = backend_.createBuffer(info);
+        auto *stagingPointer = backend_.getMapping(staging);
+
+        const tga::BufferInfo bufferInfo{tga::BufferUsage::storage, entrySize, staging};
+
+        // Low Precision
+        std::memcpy(stagingPointer, lowPrecisions.data(), entrySize);
+        pointsBufferPack_.positionLowPrecision = backend_.createBuffer(bufferInfo);
+
+        // Medium Precision
+        std::memcpy(stagingPointer, mediumPrecisions.data(), entrySize);
+        pointsBufferPack_.positionMediumPrecision = backend_.createBuffer(bufferInfo);
+
+        // High Precision
+        std::memcpy(stagingPointer, highPrecisions.data(), entrySize);
+        pointsBufferPack_.positionHighPrecision = backend_.createBuffer(bufferInfo);
+
+        // Colors
+        std::memcpy(stagingPointer, colors.data(), entrySize);
+        pointsBufferPack_.colors = backend_.createBuffer(bufferInfo);
 
         backend_.free(staging);
     }
@@ -55,7 +131,10 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
     }
 }
 
-tga::Buffer TGAPointCloudAcceleration::GetPointsBuffer() const { return pointsBuffer_; }
+TGAPointCloudAcceleration::PointBuffers TGAPointCloudAcceleration::GetPointsBufferPack() const
+{
+    return pointsBufferPack_;
+}
 
 tga::Buffer TGAPointCloudAcceleration::GetAccelerationStructureBuffer() const { return accelerationBuffer_; }
 
@@ -65,7 +144,10 @@ std::uint32_t TGAPointCloudAcceleration::GetBatchCount() const { return batchCou
 
 TGAPointCloudAcceleration::~TGAPointCloudAcceleration()
 {
-    backend_.free(pointsBuffer_);
+    backend_.free(pointsBufferPack_.positionLowPrecision);
+    backend_.free(pointsBufferPack_.positionMediumPrecision);
+    backend_.free(pointsBufferPack_.positionHighPrecision);
+    backend_.free(pointsBufferPack_.colors);
     backend_.free(batchesBuffer_);
     backend_.free(accelerationBuffer_);
 }

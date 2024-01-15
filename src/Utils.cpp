@@ -84,11 +84,11 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
                     for (std::uint32_t i = 0; i < primPointCount; ++i) {
                         glm::vec4 fColor;
                         memcpy(&fColor, &buffer[bufferOffset + i * stride], stride);
-
-                        points[currentPointCount + i].r = static_cast<std::uint8_t>(fColor.r * 255);
-                        points[currentPointCount + i].g = static_cast<std::uint8_t>(fColor.g * 255);
-                        points[currentPointCount + i].b = static_cast<std::uint8_t>(fColor.b * 255);
-                        points[currentPointCount + i].a = 255;
+                        
+                        points[currentPointCount + i].color.r = static_cast<std::uint8_t>(fColor.r * 255);
+                        points[currentPointCount + i].color.g = static_cast<std::uint8_t>(fColor.g * 255);
+                        points[currentPointCount + i].color.b = static_cast<std::uint8_t>(fColor.b * 255);
+                        points[currentPointCount + i].color.a = 255;
                     }
                 }
             }
@@ -114,9 +114,8 @@ std::vector<Batch> LoadScene(std::string_view scene, std::vector<Point>& points)
     // Implement this https://ieeexplore.ieee.org/document/5383353
     std::sort(points.begin(), points.end());
 
-    constexpr auto maxBatchSize = 4;
     auto batch = Batch(0U, 0ULL, std::span(points));
-    return batch.Subdivide(maxBatchSize);
+    return batch.Subdivide();
 }
 
 std::uint64_t Point::mortonIndex() const
@@ -188,11 +187,11 @@ Batch::Batch(auto _iteration, auto _mortonCode, auto _points)
     };
 }
 
-std::vector<Batch> Batch::Subdivide(const std::uint32_t maxBatchCount)
+std::vector<Batch> Batch::Subdivide()
 {
     std::vector<Batch> result;
 
-    if (points.size() < maxBatchCount) {
+    if (points.size() < MaxBatchSize) {
         leaf = true;
         result.push_back(*this);
     } else {
@@ -223,7 +222,7 @@ std::vector<Batch> Batch::Subdivide(const std::uint32_t maxBatchCount)
 
         // filter subdivide results
         for (auto i = 0; i < children.size(); i++) {
-            auto res = children[i].Subdivide(maxBatchCount);
+            auto res = children[i].Subdivide();
 
             // return just leafs and non-empty nodes
             for (auto& node : res) {

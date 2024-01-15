@@ -5,22 +5,32 @@
 #include <vector>
 #include <span>
 
-class Point {
-public:
-    glm::vec3 position;
+constexpr auto MaxBatchSize = 256;
+
+struct CompressedPosition {
+    std::uint32_t x : 10;
+    std::uint32_t y : 10;
+    std::uint32_t z : 10;
+    std::uint32_t padding : 2;
+};
+
+struct CompressedColor {
     std::uint32_t r : 8;
     std::uint32_t g : 8;
     std::uint32_t b : 8;
     std::uint32_t a : 8;
+};
 
-    const bool operator<(const Point q) const { 
-        return this->mortonIndex() < q.mortonIndex(); 
-    }
+struct Point {
+    glm::vec3 position;
+    CompressedColor color;
+
+    const bool operator<(const Point q) const { return this->mortonIndex() < q.mortonIndex(); }
 
     // https://stackoverflow.com/questions/26856268/morton-index-from-2d-point-with-floats
     static_assert((sizeof(std::uint32_t) == sizeof(float)) && (sizeof(std::uint32_t) * CHAR_BIT == 32) &&
-                    (sizeof(std::uint64_t) * CHAR_BIT == 64),
-                "We need 32-bit ints and floats, and 64-bit long longs!");
+                      (sizeof(std::uint64_t) * CHAR_BIT == 64),
+                  "We need 32-bit ints and floats, and 64-bit long longs!");
 
     std::uint64_t mortonIndex() const;
 };
@@ -42,7 +52,7 @@ public:
     Batch();
     Batch(auto _iteration, auto _mortonCode, auto _points);
 
-    std::vector<Batch> Subdivide(const std::uint32_t maxBatchCount);
+    std::vector<Batch> Subdivide();
     const std::uint32_t MortonToNodeID(const std::uint64_t mortonCode) const;
 };
 
