@@ -32,13 +32,13 @@ BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch>& batches)
             // convert float position to 30-bit fixed precision relative to BB
             const auto x30 = std::min(
                 static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.x - batch.aabb.minV.x) / aabbSize.x)),
-                         static_cast<std::uint32_t>((1 << 30) - 1));
+                static_cast<std::uint32_t>((1 << 30) - 1));
             const auto y30 = std::min(
                 static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.y - batch.aabb.minV.y) / aabbSize.y)),
-                         static_cast<std::uint32_t>((1 << 30) - 1));
+                static_cast<std::uint32_t>((1 << 30) - 1));
             const auto z30 = std::min(
                 static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.z - batch.aabb.minV.z) / aabbSize.z)),
-                         static_cast<std::uint32_t>((1 << 30) - 1));
+                static_cast<std::uint32_t>((1 << 30) - 1));
 
             lowPrecisions.emplace_back((x30 >> 20) & 0x3FF, (y30 >> 20) & 0x3FF, (z30 >> 20) & 0x3FF,
                                        0);  // take upmost 10 bit of each coordinate as low precision

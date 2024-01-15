@@ -1,9 +1,9 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <span>
 #include <string_view>
 #include <vector>
-#include <span>
 
 constexpr auto MaxBatchSize = 256;
 

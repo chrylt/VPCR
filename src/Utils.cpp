@@ -84,7 +84,7 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
                     for (std::uint32_t i = 0; i < primPointCount; ++i) {
                         glm::vec4 fColor;
                         memcpy(&fColor, &buffer[bufferOffset + i * stride], stride);
-                        
+
                         points[currentPointCount + i].color.r = static_cast<std::uint8_t>(fColor.r * 255);
                         points[currentPointCount + i].color.g = static_cast<std::uint8_t>(fColor.g * 255);
                         points[currentPointCount + i].color.b = static_cast<std::uint8_t>(fColor.b * 255);
