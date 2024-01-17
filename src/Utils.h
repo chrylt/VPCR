@@ -38,31 +38,23 @@ struct Point {
 struct AABB {
     alignas(16) glm::vec3 minV;
     alignas(16) glm::vec3 maxV;
-
-    AABB()
-    {
-        minV = {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-                std::numeric_limits<float>::infinity()};
-        maxV = {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-                -std::numeric_limits<float>::infinity()};
-    }
 };
 
 struct BatchID {
-    std::uint64_t mortonCode_ : 57;
-    std::uint64_t iteration_ : 5;
-    std::uint64_t leaf_ : 1;
-    std::uint64_t pad_ : 1;
+    std::uint64_t mortonCode : 57;
+    std::uint64_t iteration : 5;
+    std::uint64_t leaf : 1;
+    std::uint64_t pad : 1;
 };
 
 struct Batch {
-    BatchID id_;
+    BatchID id;
 
-    AABB aabb_;
-    std::span<Point> points_;
+    AABB aabb;
+    std::span<Point> points;
 
-    Batch(const std::uint32_t iteration, const std::uint64_t mortonCode, const std::span<Point> points,
-          const AABB aabb = AABB(), const bool leaf = false);
+    Batch(std::uint32_t iteration, std::uint64_t mortonCode, std::span<Point> points, AABB aabb = AABB(),
+          bool leaf = false);
 
     std::vector<Batch> Subdivide() const;
 
@@ -71,15 +63,9 @@ private:
     std::uint64_t NodeIDToMorton(const std::uint32_t nodeID) const;
 };
 
-class BatchedPointCloud {
-    std::vector<Point> points_;
-    std::vector<Batch> batches_;
-
-public:
-    BatchedPointCloud(std::vector<Point>&& points);
-
-    const std::vector<Point> GetPoints();
-    const std::vector<Batch> GetBatches();
+struct BatchedPointCloud {
+    std::vector<Point> points;
+    std::vector<Batch> batches;
 };
 
 BatchedPointCloud LoadScene(const std::string_view scene);

@@ -24,20 +24,20 @@ BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch>& batches)
     colors.reserve(batches.size() * MaxBatchSize);
 
     for (const auto& batch : batches) {
-        for (const auto& [position, color] : batch.points_) {
+        for (const auto& [position, color] : batch.points) {
             // Compress position and split into multiple buffers
             const glm::vec3& floatPos = position;
-            const glm::vec3 aabbSize = batch.aabb_.maxV - batch.aabb_.minV;
+            const glm::vec3 aabbSize = batch.aabb.maxV - batch.aabb.minV;
 
             // convert float position to 30-bit fixed precision relative to BB
             const auto x30 = std::min(
-                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.x - batch.aabb_.minV.x) / aabbSize.x)),
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.x - batch.aabb.minV.x) / aabbSize.x)),
                 static_cast<std::uint32_t>((1 << 30) - 1));
             const auto y30 = std::min(
-                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.y - batch.aabb_.minV.y) / aabbSize.y)),
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.y - batch.aabb.minV.y) / aabbSize.y)),
                 static_cast<std::uint32_t>((1 << 30) - 1));
             const auto z30 = std::min(
-                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.z - batch.aabb_.minV.z) / aabbSize.z)),
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.z - batch.aabb.minV.z) / aabbSize.z)),
                 static_cast<std::uint32_t>((1 << 30) - 1));
 
             lowPrecisions.emplace_back((x30 >> 20) & 0x3FF, (y30 >> 20) & 0x3FF, (z30 >> 20) & 0x3FF,
@@ -62,7 +62,7 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
     // TODO: @Atzubi
 
     auto batchedPointCloud = LoadScene(scenePath);
-    const auto batches = batchedPointCloud.GetBatches();
+    const auto& batches = batchedPointCloud.batches;
     batchCount_ = static_cast<std::uint32_t>(batches.size());
 
     // Create buffers for points
@@ -111,8 +111,8 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
         std::vector<GpuBatch> gpuBatches;
         std::uint32_t offset = 0;
         for (const auto& batch : batches) {
-            gpuBatches.emplace_back(batch.aabb_, offset, static_cast<std::uint32_t>(batch.points_.size()));
-            offset += static_cast<std::uint32_t>(batch.points_.size());
+            gpuBatches.emplace_back(batch.aabb, offset, static_cast<std::uint32_t>(batch.points.size()));
+            offset += static_cast<std::uint32_t>(batch.points.size());
         }
 
         const tga::StagingBufferInfo stagingInfo{gpuBatches.size() * sizeof(GpuBatch),

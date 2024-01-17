@@ -109,8 +109,13 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
 BatchedPointCloud LoadScene(std::string_view scene)
 {
     auto points = LoadScenePoints(scene);
+    // TODO add a hashmap for morton code to make this faster or
+    // Implement this https://ieeexplore.ieee.org/document/5383353
+    std::sort(points.begin(), points.end());
 
-    BatchedPointCloud batched(std::move(points));
+    auto batch = Batch(0U, 0ULL, std::span(points));
+
+    BatchedPointCloud batched{std::move(points), std::move(batch.Subdivide())};
     return batched;
 }
 
@@ -164,67 +169,70 @@ std::uint64_t Point::MortonIndex() const
     return xx | (yy << 1U) | (zz << 2U);
 }
 
-Batch::Batch(const std::uint32_t iteration, const std::uint64_t mortonCode, const std::span<Point> points,
-             const AABB aabb, const bool leaf)
+Batch::Batch(std::uint32_t iteration, std::uint64_t mortonCode, std::span<Point> inPoints, AABB box, bool isLeaf)
 {
     // we only support tree depth up to 18
     if (iteration > 18) {
         throw std::runtime_error("Tree exceded maximum supported depth");
     }
 
-    aabb_ = aabb;
-    points_ = points;
+    aabb = box;
+    points = inPoints;
 
-    id_.leaf_ = leaf;
-    id_.iteration_ = iteration;
-    id_.mortonCode_ = mortonCode;
+    id.leaf = isLeaf;
+    id.iteration = iteration;
+    id.mortonCode = mortonCode;
 }
 
 std::vector<Batch> Batch::Subdivide() const
 {
     std::vector<Batch> result;
 
-    if (points_.size() < MaxBatchSize) {
-        result.push_back(Batch(id_.iteration_ + 1, NodeIDToMorton(id_.iteration_), points_, aabb_, true));
+    if (points.size() < MaxBatchSize) {
+        result.push_back(Batch(id.iteration + 1, NodeIDToMorton(id.iteration), points, aabb, true));
     } else {
         std::vector<Batch> children;
 
-        auto count = 0;
-        auto offset = 0;
-        auto box = AABB();
-        auto prevPointNodeID = MortonToNodeID(points_.begin()->MortonIndex());
-
+        std::uint32_t count = 0;
+        std::uint32_t offset = 0;
+        AABB box = {{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
+                     std::numeric_limits<float>::infinity()},
+                    {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+                     -std::numeric_limits<float>::infinity()}};
+        auto prevPointNodeID = MortonToNodeID(points.begin()->MortonIndex());
         // splitting points into octree nodes
-        /// points_ is already sorted by morton code so points related to the same node are in a contiguous range.
-        /// Just find the range and set the span
-        for (auto& point : points_) {
+        // points_ is already sorted by morton code so points related to the same node are in a contiguous range.
+        // Just find the range and set the span
+        for (auto& point : points) {
             const auto currPointNodeID = MortonToNodeID(point.MortonIndex());
 
             // if NodeID changed
             if (prevPointNodeID != currPointNodeID) {
-                children.push_back(
-                    Batch(id_.iteration_ + 1, NodeIDToMorton(prevPointNodeID), points_.subspan(offset, count), box));
+                children.emplace_back(
+                    Batch(id.iteration + 1, NodeIDToMorton(prevPointNodeID), points.subspan(offset, count), box));
 
                 offset += count;
                 count = 0;
-                box = AABB();
+                box = {{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
+                        std::numeric_limits<float>::infinity()},
+                       {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+                        -std::numeric_limits<float>::infinity()}};
                 prevPointNodeID = currPointNodeID;
             }
-            count++;
+            ++count;
 
             box.minV = glm::min(box.minV, point.position);
             box.maxV = glm::max(box.maxV, point.position);
         }
         // check if last node has elements and add it
         if (count != 0) {
-            children.push_back(
-                Batch(id_.iteration_ + 1, NodeIDToMorton(prevPointNodeID), points_.subspan(offset, count), box));
+            children.emplace_back(
+                Batch(id.iteration + 1, NodeIDToMorton(prevPointNodeID), points.subspan(offset, count), box));
         }
 
         // combine subdivide results
-        for (std::size_t i = 0; i < children.size(); i++) {
-            const auto res = children[i].Subdivide();
-
+        for (auto& child : children) {
+            const auto res = child.Subdivide();
             result.insert(result.end(), res.begin(), res.end());
         }
     }
@@ -236,28 +244,12 @@ std::uint32_t Batch::MortonToNodeID(const std::uint64_t mortonCode) const
 {
     // NodeID is a three bit number taken of the morton code according to node level in the tree.
     // iteration(Node Level) 0 means the root Node. MortonCode used is a 63 bit mortoncode. Mask with 0b0111.
-    return (mortonCode >> (60U - id_.iteration_ * 3U)) & 0x7U;
+    return (mortonCode >> (60U - id.iteration * 3U)) & 0x7U;
 }
 
 std::uint64_t Batch::NodeIDToMorton(const std::uint32_t nodeID) const
 {
     // MortonCode limit used by the tree is 57 bits.
     // To get the Morton Code: shift the nodeID to correct iteartion bits and combine with parents Morton code.
-    return (static_cast<std::uint64_t>(nodeID) << (54U - id_.iteration_ * 3U)) | id_.mortonCode_;
+    return (static_cast<std::uint64_t>(nodeID) << (54U - id.iteration * 3U)) | id.mortonCode;
 }
-
-BatchedPointCloud::BatchedPointCloud(std::vector<Point>&& points)
-{
-    points_ = std::move(points);
-
-    // TODO add a hashmap for morton code to make this faster or
-    // Implement this https://ieeexplore.ieee.org/document/5383353
-    std::sort(points_.begin(), points_.end());
-
-    auto batch = Batch(0U, 0ULL, std::span(points_));
-    batches_ = std::move(batch.Subdivide());
-}
-
-const std::vector<Point> BatchedPointCloud::GetPoints() { return points_; }
-
-const std::vector<Batch> BatchedPointCloud::GetBatches() { return batches_; }
