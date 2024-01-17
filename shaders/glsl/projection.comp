@@ -58,7 +58,7 @@ layout(set = 3, binding = 1) readonly buffer BatchList{
     uint batchList[];
 };
 
-layout(local_size_x = 128) in;
+layout(local_size_x = 1024) in;
 
 uint getBatchPixelExtend(const Batch currBatch){
     // determine precision by projecting batch aabb to screen
@@ -119,8 +119,7 @@ vec3 getAdaptivePointPosition(const vec3 batchBoxSize, const vec3 batchBoxMin, c
 }
 
 void main(){
-
-    const uint id = gl_GlobalInvocationID.x;
+    const uint id = gl_GlobalInvocationID.x / gl_WorkGroupSize.x;
     if (id >= batchCount){
         return;
     }
@@ -128,8 +127,13 @@ void main(){
     const Batch batch = batches[batchList[id]];
     const vec3 batchBBSize = batch.box.maxV - batch.box.minV;
     const uint batchPixelExtend = getBatchPixelExtend(batch);
+    const uint localId = gl_LocalInvocationID.x;
+    const uint workAmount = (batch.pointCount / gl_WorkGroupSize.x) + 1;
 
-    for (uint k = batch.pointOffset; k < batch.pointOffset + batch.pointCount; ++k){
+    for (uint k = batch.pointOffset + localId * workAmount; k < batch.pointOffset + (localId + 1) * workAmount; ++k){
+        if ((k - batch.pointOffset) >= batch.pointCount){
+            break;
+        }
 
         const vec4 projected = camera.projection * camera.view * vec4(getAdaptivePointPosition(batchBBSize, batch.box.minV, batchPixelExtend, k), 1);
 

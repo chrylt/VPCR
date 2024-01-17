@@ -4,7 +4,7 @@
 #include <string_view>
 #include <vector>
 
-constexpr auto MaxBatchSize = 8;
+constexpr auto MaxBatchSize = 8192;
 
 struct CompressedPosition {
     std::uint32_t x : 10;
