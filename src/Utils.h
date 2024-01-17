@@ -25,7 +25,7 @@ struct Point {
     glm::vec3 position;
     CompressedColor color;
 
-    bool operator<(const Point q) const { return this->MortonIndex() < q.MortonIndex(); }
+    bool operator<(const Point& q) const;
 
     // https://stackoverflow.com/questions/26856268/morton-index-from-2d-point-with-floats
     static_assert((sizeof(std::uint32_t) == sizeof(float)) && (sizeof(std::uint32_t) * CHAR_BIT == 32) &&
@@ -38,22 +38,48 @@ struct Point {
 struct AABB {
     alignas(16) glm::vec3 minV;
     alignas(16) glm::vec3 maxV;
+
+    AABB()
+    {
+        minV = {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
+                std::numeric_limits<float>::infinity()};
+        maxV = {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+                -std::numeric_limits<float>::infinity()};
+    }
 };
 
-class Batch {
-public:
-    std::uint64_t mortonCode : 57;
-    std::uint64_t iteration : 5;
-    std::uint64_t leaf : 1;
+struct BatchID {
+    std::uint64_t mortonCode_ : 57;
+    std::uint64_t iteration_ : 5;
+    std::uint64_t leaf_ : 1;
+    std::uint64_t pad_ : 1;
+};
 
-    AABB aabb;
-    std::span<Point> points;
+struct Batch {
+    BatchID id_;
 
-    Batch();
-    Batch(auto _iteration, auto _mortonCode, auto _points);
+    AABB aabb_;
+    std::span<Point> points_;
 
-    std::vector<Batch> Subdivide();
+    Batch(const std::uint32_t iteration, const std::uint64_t mortonCode, const std::span<Point> points,
+          const AABB aabb = AABB(), const bool leaf = false);
+
+    std::vector<Batch> Subdivide() const;
+
+private:
     std::uint32_t MortonToNodeID(const std::uint64_t mortonCode) const;
+    std::uint64_t NodeIDToMorton(const std::uint32_t nodeID) const;
 };
 
-std::vector<Batch> LoadScene(const std::string_view scene, std::vector<Point>& points);
+class BatchedPointCloud {
+    std::vector<Point> points_;
+    std::vector<Batch> batches_;
+
+public:
+    BatchedPointCloud(std::vector<Point>&& points);
+
+    const std::vector<Point> GetPoints();
+    const std::vector<Batch> GetBatches();
+};
+
+BatchedPointCloud LoadScene(const std::string_view scene);

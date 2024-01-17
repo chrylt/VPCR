@@ -73,14 +73,14 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
                 const auto bufferOffset = accessor.byteOffset + bufferView.byteOffset;
                 const auto stride = accessor.ByteStride(bufferView);
 
-                if (accessorName.compare("POSITION") == 0) {
+                if (accessorName == "POSITION") {
                     for (std::uint32_t i = 0; i < primPointCount; ++i) {
                         glm::vec4 position = glm::vec4(0, 0, 0, 1);
                         memcpy(&position, &buffer[bufferOffset + i * stride], stride);
 
                         points[currentPointCount + i].position = modelMatrix * position;
                     }
-                } else if (accessorName.compare(0, 5, "COLOR") == 0) {
+                } else if (accessorName.substr(0, 5) == "COLOR") {
                     for (std::uint32_t i = 0; i < primPointCount; ++i) {
                         glm::vec4 fColor;
                         memcpy(&fColor, &buffer[bufferOffset + i * stride], stride);
@@ -106,17 +106,15 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
 
 }  // namespace
 
-std::vector<Batch> LoadScene(std::string_view scene, std::vector<Point>& points)
+BatchedPointCloud LoadScene(std::string_view scene)
 {
-    points = LoadScenePoints(scene);
+    auto points = LoadScenePoints(scene);
 
-    // TODO add a hashmap for morton code to make this faster or
-    // Implement this https://ieeexplore.ieee.org/document/5383353
-    std::sort(points.begin(), points.end());
-
-    auto batch = Batch(0U, 0ULL, std::span(points));
-    return batch.Subdivide();
+    BatchedPointCloud batched(std::move(points));
+    return batched;
 }
+
+bool Point::operator<(const Point& q) const { return this->MortonIndex() < q.MortonIndex(); }
 
 std::uint64_t Point::MortonIndex() const
 {
@@ -166,72 +164,68 @@ std::uint64_t Point::MortonIndex() const
     return xx | (yy << 1U) | (zz << 2U);
 }
 
-Batch::Batch() : points(std::span<Point>()), iteration(0), mortonCode(0), leaf(false)
+Batch::Batch(const std::uint32_t iteration, const std::uint64_t mortonCode, const std::span<Point> points,
+             const AABB aabb, const bool leaf)
 {
-    aabb = {
-        {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-         std::numeric_limits<float>::infinity()},
-        {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-         -std::numeric_limits<float>::infinity()},
-    };
-};
+    // we only support tree depth up to 18
+    if (iteration > 18) {
+        throw std::runtime_error("Tree exceded maximum supported depth");
+    }
 
-Batch::Batch(auto iteration, auto mortonCode, auto points)
-    : points(points), iteration(iteration), mortonCode(mortonCode), leaf(false)
-{
-    aabb = {
-        {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-         std::numeric_limits<float>::infinity()},
-        {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-         -std::numeric_limits<float>::infinity()},
-    };
+    aabb_ = aabb;
+    points_ = points;
+
+    id_.leaf_ = leaf;
+    id_.iteration_ = iteration;
+    id_.mortonCode_ = mortonCode;
 }
 
-std::vector<Batch> Batch::Subdivide()
+std::vector<Batch> Batch::Subdivide() const
 {
     std::vector<Batch> result;
 
-    if (points.size() < MaxBatchSize) {
-        leaf = true;
-        result.push_back(*this);
+    if (points_.size() < MaxBatchSize) {
+        result.push_back(Batch(id_.iteration_ + 1, NodeIDToMorton(id_.iteration_), points_, aabb_, true));
     } else {
-        std::array<Batch, 8> children;
-        for (size_t i = 0; i < children.size(); i++) {
-            children[i] = Batch(iteration + 1, i << (54U - iteration * 3U) | mortonCode, points.subspan(0, 0));
-        }
+        std::vector<Batch> children;
+
+        auto count = 0;
+        auto offset = 0;
+        auto box = AABB();
+        auto prevPointNodeID = MortonToNodeID(points_.begin()->MortonIndex());
 
         // splitting points into octree nodes
-        auto prevNodeStartIT = points.begin();
-        auto prevPointNodeID = MortonToNodeID(points.begin()->MortonIndex());
-        for (auto it = points.begin(); it != points.end(); ++it) {
-            const auto currPointNodeID = MortonToNodeID(it->MortonIndex());
+        /// points_ is already sorted by morton code so points related to the same node are in a contiguous range.
+        /// Just find the range and set the span
+        for (auto& point : points_) {
+            const auto currPointNodeID = MortonToNodeID(point.MortonIndex());
 
-            auto& box = children[currPointNodeID].aabb;
-            box.minV = glm::min(box.minV, it->position);
-            box.maxV = glm::max(box.maxV, it->position);
+            // if NodeID changed
+            if (prevPointNodeID != currPointNodeID) {
+                children.push_back(
+                    Batch(id_.iteration_ + 1, NodeIDToMorton(prevPointNodeID), points_.subspan(offset, count), box));
 
-            // if NodeID changed or first run
-            if (prevPointNodeID != currPointNodeID || it == prevNodeStartIT) {
-                children[prevPointNodeID].points = std::span<Point>(prevNodeStartIT, it);
-                children[currPointNodeID].points = std::span<Point>(it, points.end());
-
-                prevNodeStartIT = it;
+                offset += count;
+                count = 0;
+                box = AABB();
                 prevPointNodeID = currPointNodeID;
             }
+            count++;
+
+            box.minV = glm::min(box.minV, point.position);
+            box.maxV = glm::max(box.maxV, point.position);
+        }
+        // check if last node has elements and add it
+        if (count != 0) {
+            children.push_back(
+                Batch(id_.iteration_ + 1, NodeIDToMorton(prevPointNodeID), points_.subspan(offset, count), box));
         }
 
-        // filter subdivide results
-        for (auto i = 0; i < children.size(); i++) {
-            auto res = children[i].Subdivide();
+        // combine subdivide results
+        for (std::size_t i = 0; i < children.size(); i++) {
+            const auto res = children[i].Subdivide();
 
-            // return just leafs and non-empty nodes
-            for (auto& node : res) {
-                if (!node.leaf || node.points.empty()) {
-                    continue;
-                }
-
-                result.push_back(node);
-            }
+            result.insert(result.end(), res.begin(), res.end());
         }
     }
 
@@ -240,5 +234,30 @@ std::vector<Batch> Batch::Subdivide()
 
 std::uint32_t Batch::MortonToNodeID(const std::uint64_t mortonCode) const
 {
-    return (mortonCode >> (60U - iteration * 3U)) & 0x7U;
+    // NodeID is a three bit number taken of the morton code according to node level in the tree.
+    // iteration(Node Level) 0 means the root Node. MortonCode used is a 63 bit mortoncode. Mask with 0b0111.
+    return (mortonCode >> (60U - id_.iteration_ * 3U)) & 0x7U;
 }
+
+std::uint64_t Batch::NodeIDToMorton(const std::uint32_t nodeID) const
+{
+    // MortonCode limit used by the tree is 57 bits.
+    // To get the Morton Code: shift the nodeID to correct iteartion bits and combine with parents Morton code.
+    return (static_cast<std::uint64_t>(nodeID) << (54U - id_.iteration_ * 3U)) | id_.mortonCode_;
+}
+
+BatchedPointCloud::BatchedPointCloud(std::vector<Point>&& points)
+{
+    points_ = std::move(points);
+
+    // TODO add a hashmap for morton code to make this faster or
+    // Implement this https://ieeexplore.ieee.org/document/5383353
+    std::sort(points_.begin(), points_.end());
+
+    auto batch = Batch(0U, 0ULL, std::span(points_));
+    batches_ = std::move(batch.Subdivide());
+}
+
+const std::vector<Point> BatchedPointCloud::GetPoints() { return points_; }
+
+const std::vector<Batch> BatchedPointCloud::GetBatches() { return batches_; }
