@@ -106,6 +106,16 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
 
 }  // namespace
 
+AABB CreateInitializerBox()
+{
+    AABB aabb = {{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
+            std::numeric_limits<float>::infinity()},
+           {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+            -std::numeric_limits<float>::infinity()}};
+
+    return aabb;
+}
+
 BatchedPointCloud LoadScene(std::string_view scene)
 {
     auto points = LoadScenePoints(scene);
@@ -169,7 +179,8 @@ std::uint64_t Point::MortonIndex() const
     return xx | (yy << 1U) | (zz << 2U);
 }
 
-Batch::Batch(std::uint32_t iteration, std::uint64_t mortonCode, std::span<Point> inPoints, AABB box, bool isLeaf)
+Batch::Batch(const std::uint32_t iteration, const std::uint64_t mortonCode, const std::span<Point> inPoints,
+             const AABB box, const bool isLeaf)
 {
     // we only support tree depth up to 18
     if (iteration > 18) {
@@ -195,10 +206,7 @@ std::vector<Batch> Batch::Subdivide() const
 
         std::uint32_t count = 0;
         std::uint32_t offset = 0;
-        AABB box = {{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-                     std::numeric_limits<float>::infinity()},
-                    {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-                     -std::numeric_limits<float>::infinity()}};
+        AABB box = CreateInitializerBox();
         auto prevPointNodeID = MortonToNodeID(points.begin()->MortonIndex());
         // splitting points into octree nodes
         // points_ is already sorted by morton code so points related to the same node are in a contiguous range.
@@ -213,10 +221,7 @@ std::vector<Batch> Batch::Subdivide() const
 
                 offset += count;
                 count = 0;
-                box = {{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-                        std::numeric_limits<float>::infinity()},
-                       {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-                        -std::numeric_limits<float>::infinity()}};
+                box = CreateInitializerBox();
                 prevPointNodeID = currPointNodeID;
             }
             ++count;

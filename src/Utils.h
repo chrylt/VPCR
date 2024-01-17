@@ -53,14 +53,14 @@ struct Batch {
     AABB aabb;
     std::span<Point> points;
 
-    Batch(std::uint32_t iteration, std::uint64_t mortonCode, std::span<Point> points, AABB aabb = AABB(),
+     const Batch(std::uint32_t iteration, std::uint64_t mortonCode, std::span<Point> points, AABB aabb = AABB(),
           bool leaf = false);
 
     std::vector<Batch> Subdivide() const;
 
 private:
-    std::uint32_t MortonToNodeID(const std::uint64_t mortonCode) const;
-    std::uint64_t NodeIDToMorton(const std::uint32_t nodeID) const;
+    std::uint32_t MortonToNodeID(std::uint64_t mortonCode) const;
+    std::uint64_t NodeIDToMorton(std::uint32_t nodeID) const;
 };
 
 struct BatchedPointCloud {
@@ -68,4 +68,4 @@ struct BatchedPointCloud {
     std::vector<Batch> batches;
 };
 
-BatchedPointCloud LoadScene(const std::string_view scene);
+BatchedPointCloud LoadScene(std::string_view scene);
