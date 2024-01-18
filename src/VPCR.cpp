@@ -10,8 +10,7 @@
 namespace
 {
 // Should match compute shaders
-constexpr std::uint32_t ComputeLaneCount = 32;
-constexpr std::uint32_t WorkerCount = 1471 * 64;  // TODO: get hardware thread count + heuristic
+constexpr std::uint32_t ComputeLaneCount = 1024;
 
 class VPCRImpl final : public VPCR {
 public:
@@ -42,7 +41,6 @@ private:
     struct DynamicConst {
         // Misc information we need on gpu
         std::uint32_t totalBatchCount;
-        std::uint32_t threadCount;
     };
 
     struct Statistics {
@@ -142,7 +140,7 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
 
     // Print FPS and statistics on window title
     {
-        const auto* statistics =
+        const auto *statistics =
             reinterpret_cast<const Statistics *>(backend_.getMapping(pipelines_[frameIndex].statisticsDownload));
         if ((currentTime - lastTitleUpdate_).count() / 1000000000.f >= 1.f) {
             lastTitleUpdate_ = std::chrono::high_resolution_clock::now();
@@ -225,10 +223,11 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
 
     // Collect Execution Commands
     const auto res = config_.Get<std::vector<std::uint32_t>>("resolution").value();
+    const auto batchCount = pointCloudAcceleration_->GetBatchCount();
     clearPass->Execute(commandRecorder, res[0] / ComputeLaneCount + 1, res[1]);
-    lodPass->Execute(commandRecorder, WorkerCount / ComputeLaneCount + 1);
+    lodPass->Execute(commandRecorder, batchCount);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
-    projectionPass->Execute(commandRecorder, WorkerCount / ComputeLaneCount + 1);
+    projectionPass->Execute(commandRecorder, batchCount);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::FragmentShader);
     displayPass->Execute(commandRecorder, frameIndex);
 
@@ -244,7 +243,7 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
 
 void VPCRImpl::CreateDynamicConst()
 {
-    DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(), WorkerCount};
+    DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount()};
 
     tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);
@@ -358,18 +357,20 @@ void VPCRImpl::CreateProjectionPass()
         const auto computeShader =
             tga::loadShader("../shaders/projection_comp.spv", tga::ShaderType::compute, backend_);
 
-        const tga::InputLayout inputLayout({
-            // Set = 0: Camera, DynamicConst
-            {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
-            // Set = 1: Rendertarget, Depthbuffer
-            {{{tga::BindingType::storageImage}, {tga::BindingType::storageImage}}},
-            // Set = 2: Points
-            {{{tga::BindingType::storageBuffer}}},
-            // Set = 3: Batches, Batch list
-            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}},
-            // Set = 4: Statistics
-            {{{tga::BindingType::storageBuffer}}},
-        });
+        const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
+                                            {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
+                                            // Set = 1: Rendertarget, Depthbuffer
+                                            {{{tga::BindingType::storageImage}, {tga::BindingType::storageImage}}},
+                                            // Set = 2: PointsPositionLowPrecision, PointsPositionMediumPrecision,
+                                            // PointsPositionHighPrecision, PointsColor
+                                            {{{tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer}}},
+                                            // Set = 3: Batches, Batch list
+                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}},
+                                            // Set = 4: Statistics
+                                            {{{tga::BindingType::storageBuffer}}}});
 
         const tga::ComputePassInfo passInfo(computeShader, inputLayout);
         projectionPass = std::make_unique<TGAComputePass>(backend_, passInfo);
@@ -378,7 +379,14 @@ void VPCRImpl::CreateProjectionPass()
         projectionPass->BindInput(dynamicConst_, 0, 1);
         projectionPass->BindInput(pipeline.renderTarget, 1, 0);
         projectionPass->BindInput(pipeline.depthBuffer, 1, 1);
-        projectionPass->BindInput(pointCloudAcceleration_->GetPointsBuffer(), 2);
+
+        // Point information buffers
+        const auto& pointsBufferPack = pointCloudAcceleration_->GetPointsBufferPack();
+        projectionPass->BindInput(pointsBufferPack.positionLowPrecision, 2, 0);
+        projectionPass->BindInput(pointsBufferPack.positionMediumPrecision, 2, 1);
+        projectionPass->BindInput(pointsBufferPack.positionHighPrecision, 2, 2);
+        projectionPass->BindInput(pointsBufferPack.colors, 2, 3);
+
         projectionPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 3, 0);
         projectionPass->BindInput(pipeline.batchList, 3, 1);
         projectionPass->BindInput(pipeline.statistics, 4, 0);

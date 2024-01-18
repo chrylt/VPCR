@@ -7,6 +7,7 @@
 
 namespace
 {
+
 struct Node {
     AABB box;
     std::uint32_t childrenPointer;
@@ -14,6 +15,18 @@ struct Node {
     std::uint32_t childMask : 8;
     std::uint32_t depth : 5;
     std::uint32_t pointCount : 19;  // 2^19 should be a reasonable maximum for the batch size
+};
+
+struct FlatLODTree {
+    std::vector<Point> points;
+    std::vector<Node> batchNodes;
+};
+
+struct BatchesCompressed {
+    std::vector<CompressedPosition> lowPrecisions;
+    std::vector<CompressedPosition> mediumPrecisions;
+    std::vector<CompressedPosition> highPrecisions;
+    std::vector<CompressedColor> colors;
 };
 
 std::vector<Point> SampleLeafs(const std::uint32_t maxCount, const std::uint64_t prefix, const std::uint8_t iteration,
@@ -26,7 +39,7 @@ std::vector<Point> SampleLeafs(const std::uint32_t maxCount, const std::uint64_t
     std::vector<Batch *> matches;
     for (auto& batch : batches) {
         if ((batch.points.size() > 0) &&
-            ((batch.mortonOrder.code >> ((batch.mortonOrder.iteration - iteration) * 3)) == prefix)) {
+            ((batch.GetMortonCode() >> ((batch.id.iteration - iteration) * 3)) == prefix)) {
             matches.push_back(&batch);
         }
     }
@@ -50,7 +63,7 @@ std::vector<Point> SampleLeafs(const std::uint32_t maxCount, const std::uint64_t
             std::uniform_int_distribution<std::uint32_t>(0, static_cast<std::uint32_t>(batch->points.size() - 1))(rng);
         sampledPoints.push_back(std::move(batch->points[pointChoice]));
         batch->points[pointChoice] = batch->points.back();
-        batch->points.pop_back();
+        batch->points.subspan(0, batch->points.size() - 1);
 
         // If batch is now empty, remove it
         if (batch->points.size() == 0) {
@@ -65,12 +78,10 @@ std::vector<Point> SampleLeafs(const std::uint32_t maxCount, const std::uint64_t
 
     return sampledPoints;
 }
-}  // namespace
 
-TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const std::string_view scenePath)
-    : backend_(tgai)
+FlatLODTree CreateLODTree(const std::string_view scenePath)
 {
-    auto originalBatches = LoadScene(scenePath);
+    auto [originalPoints, originalBatches] = LoadScene(scenePath);
 
     // Use std::map sorting of morton order to our advantage
     std::map<std::uint8_t, std::map<std::uint64_t, Node>> layeredTree;
@@ -78,13 +89,11 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
     // Sort batches as leafes into the layeredTree
     std::uint8_t maxIteration = 0;
     std::uint32_t offset = 0;
-    std::uint32_t pointCount = 0;
     for (const auto& batch : originalBatches) {
-        pointCount += static_cast<std::uint32_t>(batch.points.size());
-        layeredTree[batch.mortonOrder.iteration][batch.mortonOrder.code] = {
-            batch.box, offset, static_cast<std::uint32_t>(batch.points.size()), 0};
+        layeredTree[batch.id.iteration][batch.GetMortonCode()] = {batch.aabb, offset,
+                                                                  static_cast<std::uint32_t>(batch.points.size()), 0};
         offset += static_cast<std::uint32_t>(batch.points.size());
-        maxIteration = std::max(static_cast<std::uint8_t>(batch.mortonOrder.iteration), maxIteration);
+        maxIteration = std::max(static_cast<std::uint8_t>(batch.id.iteration), maxIteration);
     }
 
     // Create node hierarchy by iterating the layers in reverse order
@@ -106,8 +115,8 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
     // Pull up MaxBatchSize many random points from children as LOD for each node, proceed top down
     std::vector<Node> batchNodes;
     std::vector<Point> points;
-    batchNodes.reserve(pointCount / MaxBatchSize + 1);
-    points.reserve(pointCount);
+    batchNodes.reserve(originalPoints.size() / MaxBatchSize + 1);
+    points.reserve(originalPoints.size());
     for (std::uint8_t i = rootLevel; i <= maxIteration; ++i) {
         auto& layer = layeredTree[i];
         for (auto& [code, node] : layer) {
@@ -145,9 +154,9 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
             node.box = std::move(box);
             node.childrenPointer = 0;  // Set to 0 until first child sets it active
 
-            // Due to children being sorted by morton code in the map, we are guaranteed that all children of a parent
-            // are pushed back after another, hence having a single child pointer to the first child in the parent is
-            // sufficient and no further sorting is necessary
+            // Due to children being sorted by morton code in the map, we are guaranteed that all children of a
+            // parent are pushed back after another, hence having a single child pointer to the first child in the
+            // parent is sufficient and no further sorting is necessary
             batchNodes.push_back(node);
         }
     }
@@ -167,15 +176,106 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
         }
     }
 
+    // std::vector<Node> batches;
+    // std::uint32_t offset = 0;
+    // for (const auto& batch : originalBatches) {
+    //     Node node{};
+    //     node.box = batch.aabb;
+    //     node.pointOffset = offset;
+    //     node.pointCount = static_cast<std::uint32_t>(batch.points.size());
+    //     batches.push_back(std::move(node));
+    //     offset += static_cast<std::uint32_t>(batch.points.size());
+    // }
+
+    return {points, batchNodes};
+}
+
+BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Node>& batches, const std::vector<Point>& points)
+{
+    std::vector<CompressedPosition> lowPrecisions;
+    std::vector<CompressedPosition> mediumPrecisions;
+    std::vector<CompressedPosition> highPrecisions;
+    std::vector<CompressedColor> colors;
+
+    lowPrecisions.reserve(batches.size() * MaxBatchSize);
+    mediumPrecisions.reserve(batches.size() * MaxBatchSize);
+    highPrecisions.reserve(batches.size() * MaxBatchSize);
+    colors.reserve(batches.size() * MaxBatchSize);
+
+    for (const auto& batch : batches) {
+        for (std::size_t i = batch.pointOffset; i < batch.pointOffset + batch.pointCount; ++i) {
+            const auto& [position, color] = points[i];
+            // Compress position and split into multiple buffers
+            const glm::vec3& floatPos = position;
+            const glm::vec3 aabbSize = batch.box.maxV - batch.box.minV;
+
+            // convert float position to 30-bit fixed precision relative to BB
+            const auto x30 = std::min(
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.x - batch.box.minV.x) / aabbSize.x)),
+                static_cast<std::uint32_t>((1 << 30) - 1));
+            const auto y30 = std::min(
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.y - batch.box.minV.y) / aabbSize.y)),
+                static_cast<std::uint32_t>((1 << 30) - 1));
+            const auto z30 = std::min(
+                static_cast<std::uint32_t>(std::floor((1 << 30) * (floatPos.z - batch.box.minV.z) / aabbSize.z)),
+                static_cast<std::uint32_t>((1 << 30) - 1));
+
+            lowPrecisions.emplace_back((x30 >> 20) & 0x3FF, (y30 >> 20) & 0x3FF, (z30 >> 20) & 0x3FF,
+                                       0);  // take upmost 10 bit of each coordinate as low precision
+            mediumPrecisions.emplace_back((x30 >> 10) & 0x3FF, (y30 >> 10) & 0x3FF, (z30 >> 10) & 0x3FF,
+                                          0);  // take next lower 10 bit as medium precision
+            highPrecisions.emplace_back(x30 & 0x3FF, y30 & 0x3FF, z30 & 0x3FF,
+                                        0);  // take lowest 10 bit as high precision
+
+            // Pass on colors
+            colors.emplace_back(color);
+        }
+    }
+
+    return {lowPrecisions, mediumPrecisions, highPrecisions, colors};
+}
+
+}  // namespace
+
+TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const std::string_view scenePath)
+    : backend_(tgai)
+{
+    const auto [points, batchNodes] = CreateLODTree(scenePath);
+
     batchCount_ = static_cast<std::uint32_t>(batchNodes.size());
 
-    // Create buffer for points
+    // Create buffers for points
     {
-        const tga::StagingBufferInfo stagingInfo{points.size() * sizeof(Point),
-                                                 reinterpret_cast<const std::uint8_t *>(points.data())};
+        const auto [lowPrecisions, mediumPrecisions, highPrecisions, colors] =
+            ConvertToAdaptivePrecision(batchNodes, points);
+
+        const size_t numberOfPoints = lowPrecisions.size();
+
+        static_assert(sizeof(CompressedPosition) == sizeof(CompressedColor));
+        const size_t entrySize = numberOfPoints * sizeof(CompressedPosition);
+
+        const tga::StagingBufferInfo stagingInfo{entrySize};
+
         const tga::StagingBuffer staging = backend_.createStagingBuffer(stagingInfo);
-        const tga::BufferInfo info{tga::BufferUsage::storage, points.size() * sizeof(Point), staging};
-        pointsBuffer_ = backend_.createBuffer(info);
+        auto *stagingPointer = backend_.getMapping(staging);
+
+        const tga::BufferInfo bufferInfo{tga::BufferUsage::storage, entrySize, staging};
+
+        // Low Precision
+        std::memcpy(stagingPointer, lowPrecisions.data(), entrySize);
+        pointsBufferPack_.positionLowPrecision = backend_.createBuffer(bufferInfo);
+
+        // Medium Precision
+        std::memcpy(stagingPointer, mediumPrecisions.data(), entrySize);
+        pointsBufferPack_.positionMediumPrecision = backend_.createBuffer(bufferInfo);
+
+        // High Precision
+        std::memcpy(stagingPointer, highPrecisions.data(), entrySize);
+        pointsBufferPack_.positionHighPrecision = backend_.createBuffer(bufferInfo);
+
+        // Colors
+        std::memcpy(stagingPointer, colors.data(), entrySize);
+        pointsBufferPack_.colors = backend_.createBuffer(bufferInfo);
 
         backend_.free(staging);
     }
@@ -192,7 +292,10 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
     }
 }
 
-tga::Buffer TGAPointCloudAcceleration::GetPointsBuffer() const { return pointsBuffer_; }
+TGAPointCloudAcceleration::PointBuffers TGAPointCloudAcceleration::GetPointsBufferPack() const
+{
+    return pointsBufferPack_;
+}
 
 tga::Buffer TGAPointCloudAcceleration::GetBatchesBuffer() const { return batchesBuffer_; }
 
@@ -200,7 +303,9 @@ std::uint32_t TGAPointCloudAcceleration::GetBatchCount() const { return batchCou
 
 TGAPointCloudAcceleration::~TGAPointCloudAcceleration()
 {
-    backend_.free(pointsBuffer_);
+    backend_.free(pointsBufferPack_.positionLowPrecision);
+    backend_.free(pointsBufferPack_.positionMediumPrecision);
+    backend_.free(pointsBufferPack_.positionHighPrecision);
+    backend_.free(pointsBufferPack_.colors);
     backend_.free(batchesBuffer_);
-    backend_.free(accelerationBuffer_);
 }

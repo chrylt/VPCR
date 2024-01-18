@@ -26,7 +26,6 @@ layout(set = 0, binding = 0) uniform Camera{
 
 layout(set = 0, binding = 1) uniform DynamicConst{
     uint totalBatchCount;
-    uint workerCount;
 };
 
 layout(set = 1, binding = 0) readonly buffer BatchNodes{
@@ -38,7 +37,7 @@ layout(set = 1, binding = 1) buffer BatchList{
     uint batchList[];
 };
 
-layout(local_size_x = 32) in;
+layout(local_size_x = 1024) in;
 
 // Taken from https://www.shadertoy.com/view/ssyyDh
 float cbrt(const float x)
@@ -52,51 +51,42 @@ float cbrt(const float x)
 void main(){
     // TODO: @Atzubi
     const uint id = gl_GlobalInvocationID.x;
-    if (id >= workerCount){
+    if (id >= totalBatchCount){
         return;
     }
-
-    const uint workAmount = uint(ceil(float(totalBatchCount) / workerCount));
-    const uint workOffset = workAmount * id;
     
-    for (uint i = workOffset; i < workOffset + workAmount; ++i){
-        if(i >= totalBatchCount){
-            continue;
+    // TODO: traverse tree instead of processing all nodes
+    const Node batchNode = nodes[id];
+    
+    const vec3[8] aabbCorners = vec3[](
+        vec3(batchNode.box.minX, batchNode.box.minY, batchNode.box.minZ), // 0 - minimum
+        vec3(batchNode.box.minX, batchNode.box.minY, batchNode.box.maxZ), // 0 0 1 -> 1
+        vec3(batchNode.box.minX, batchNode.box.maxY, batchNode.box.minZ), // 0 1 0 -> 2
+        vec3(batchNode.box.minX, batchNode.box.maxY, batchNode.box.maxZ), // 0 1 1 -> 3
+        vec3(batchNode.box.maxX, batchNode.box.minY, batchNode.box.minZ), // 1 0 0 -> 4
+        vec3(batchNode.box.maxX, batchNode.box.minY, batchNode.box.maxZ), // 1 0 1 -> 5
+        vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.minZ), // 1 1 0 -> 6
+        vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.maxZ)  // 7 - maximum
+    );
+    
+    bool isVisible = false;
+    for (uint i = 0; i < 8; ++i) {
+        vec4 corner = camera.projection * camera.view * vec4(aabbCorners[i], 1);
+        if((-corner.w <= corner.x) && (corner.x <= corner.w) &&
+            (-corner.w <= corner.y) && (corner.y <= corner.w) &&
+            (0.f <= corner.z) && (corner.z <= corner.w)){
+            isVisible = true;
         }
-
-        // TODO: traverse tree instead of processing all nodes
-        const Node batchNode = nodes[i];
+    }
     
-        const vec3[8] aabbCorners = vec3[](
-            vec3(batchNode.box.minX, batchNode.box.minY, batchNode.box.minZ), // 0 - minimum
-            vec3(batchNode.box.minX, batchNode.box.minY, batchNode.box.maxZ), // 0 0 1 -> 1
-            vec3(batchNode.box.minX, batchNode.box.maxY, batchNode.box.minZ), // 0 1 0 -> 2
-            vec3(batchNode.box.minX, batchNode.box.maxY, batchNode.box.maxZ), // 0 1 1 -> 3
-            vec3(batchNode.box.maxX, batchNode.box.minY, batchNode.box.minZ), // 1 0 0 -> 4
-            vec3(batchNode.box.maxX, batchNode.box.minY, batchNode.box.maxZ), // 1 0 1 -> 5
-            vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.minZ), // 1 1 0 -> 6
-            vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.maxZ)  // 7 - maximum
-        );
-    
-        bool isVisible = false;
-        for (uint i = 0; i < 8; ++i) {
-            vec4 corner = camera.projection * camera.view * vec4(aabbCorners[i], 1);
-            if((-corner.w <= corner.x) && (corner.x <= corner.w) &&
-               (-corner.w <= corner.y) && (corner.y <= corner.w) &&
-               (0.f <= corner.z) && (corner.z <= corner.w)){
-                isVisible = true;
-            }
-        }
-    
-        // Frustum culling
-        if (isVisible){
-            const float distance = cbrt(length(camera.position - (aabbCorners[0] + (aabbCorners[7] - aabbCorners[0])/2.f)));
-            const float boxSize = length(aabbCorners[7] - aabbCorners[0]) * 1.5f; // TODO: figure out the correct factor
-            // LOD selection
-            if (boxSize > distance){
-                const uint currentBatchCount = atomicAdd(batchCount, 1);
-                batchList[currentBatchCount] = i;
-            }
+    // Frustum culling
+    if (isVisible){
+        const float distance = cbrt(length(camera.position - (aabbCorners[0] + (aabbCorners[7] - aabbCorners[0])/2.f)));
+        const float boxSize = length(aabbCorners[7] - aabbCorners[0]) * 1.5f; // TODO: figure out the correct factor
+        // LOD selection
+        if (boxSize > distance){
+            const uint currentBatchCount = atomicAdd(batchCount, 1);
+            batchList[currentBatchCount] = id;
         }
     }
 }

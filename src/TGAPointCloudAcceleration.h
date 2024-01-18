@@ -3,12 +3,20 @@
 #include <tga/tga.hpp>
 #include <tga/tga_utils.hpp>
 #include <tga/tga_vulkan/tga_vulkan.hpp>
+#include "Utils.h"
 
 class TGAPointCloudAcceleration final {
 public:
-    TGAPointCloudAcceleration(tga::Interface& tgai, std::string_view scenePath);
+    struct PointBuffers {
+        tga::Buffer positionLowPrecision;
+        tga::Buffer positionMediumPrecision;
+        tga::Buffer positionHighPrecision;
+        tga::Buffer colors;
+    };
 
-    tga::Buffer GetPointsBuffer() const;
+    TGAPointCloudAcceleration(tga::Interface &tgai, std::string_view scenePath);
+
+    PointBuffers GetPointsBufferPack() const;
     tga::Buffer GetBatchesBuffer() const;
 
     std::uint32_t GetBatchCount() const;
@@ -20,7 +28,6 @@ private:
 
     std::uint32_t batchCount_;
 
-    tga::Buffer pointsBuffer_;
-    tga::Buffer accelerationBuffer_;
+    PointBuffers pointsBufferPack_;
     tga::Buffer batchesBuffer_;
 };

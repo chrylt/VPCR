@@ -33,14 +33,25 @@ layout(set = 0, binding = 0) uniform Camera{
 
 layout(set = 0, binding = 1) uniform DynamicConst{
     uint totalBatchCount;
-    uint workerCount;
 };
 
 layout(set = 1, binding = 0, r32ui) uniform uimage2D renderTarget;
 layout(set = 1, binding = 1, r32ui) uniform uimage2D depthBuffer;
 
-layout(set = 2, binding = 0) readonly buffer Points{
-    Point points[];
+layout(set = 2, binding = 0) readonly buffer Points_Position_low_Precision{
+    uint pointsPosLow[];
+};
+
+layout(set = 2, binding = 1) readonly buffer Points_Position_medium_Precision{
+    uint pointsPosMedium[];
+};
+
+layout(set = 2, binding = 2) readonly buffer Points_Position_high_Precision{
+    uint pointsPosHigh[];
+};
+
+layout(set = 2, binding = 3) buffer Points_Color{
+    uint pointsRgba[];
 };
 
 layout(set = 3, binding = 0) readonly buffer BatchNodes{
@@ -56,43 +67,99 @@ layout(set = 4, binding = 0) writeonly buffer Statistics{
     uint drawnBatches;
 };
 
-layout(local_size_x = 32) in;
+layout(local_size_x = 1024) in;
+
+uint getBatchPixelExtend(const Node currBatch){
+    // determine precision by projecting batch aabb to screen
+    /// create aabb corner points
+    const vec3[8] aabbCorners = vec3[](
+        vec3(currBatch.box.minX, currBatch.box.minY, currBatch.box.minZ), // 0 - minimum
+        vec3(currBatch.box.minX, currBatch.box.minY, currBatch.box.maxZ), // 0 0 1 -> 1
+        vec3(currBatch.box.minX, currBatch.box.maxY, currBatch.box.minZ), // 0 1 0 -> 2
+        vec3(currBatch.box.minX, currBatch.box.maxY, currBatch.box.maxZ), // 0 1 1 -> 3
+        vec3(currBatch.box.maxX, currBatch.box.minY, currBatch.box.minZ), // 1 0 0 -> 4
+        vec3(currBatch.box.maxX, currBatch.box.minY, currBatch.box.maxZ), // 1 0 1 -> 5
+        vec3(currBatch.box.maxX, currBatch.box.maxY, currBatch.box.minZ), // 1 1 0 -> 6
+        vec3(currBatch.box.maxX, currBatch.box.maxY, currBatch.box.maxZ)  // 7 - maximum
+    );
+
+    /// find aabb extend on screen
+    uvec2 screenMin = camera.resolution;
+    uvec2 screenMax = uvec2(0);
+
+    for(uint i = 0; i < 8; ++i){
+        /// transform aabb & perspective divide
+        const vec4 divReady = camera.projection * camera.view * vec4(aabbCorners[i], 1);
+        const vec2 divided = (divReady / abs(divReady.w)).xy;
+        const vec2 pixelSpace = ((divided + 1) / 2) * camera.resolution;
+
+        screenMin = ivec2(min(screenMin.x, pixelSpace.x), min(screenMin.y, pixelSpace.y));
+        screenMax = ivec2(max(screenMax.x, pixelSpace.x), max(screenMax.y, pixelSpace.y));
+    }
+
+    const uint pixelExtend = max(screenMax.x - screenMin.x, screenMax.y - screenMin.y);
+    return pixelExtend;
+}
+
+vec3 getAdaptivePointPosition(const vec3 batchBoxSize, const vec3 batchBoxMin, const uint batchPixelExtend, const uint pointIdx){
+
+    vec3 resultPosition = batchBoxMin;
+
+    /// low precision
+    const uint encodedLow = pointsPosLow[pointIdx];
+    const vec3 offsetLow = vec3(encodedLow & 0x3FF, (encodedLow >> 10) & 0x3FF, (encodedLow >> 20) & 0x3FF) / (1 << 10) * batchBoxSize;
+    resultPosition += offsetLow;
+
+    if(batchPixelExtend > 512) { // 2^(10 bits) = 1024 different values; can accurately display BB across 512 pixels
+        /// add medium precision
+        const uint encodedMedium = pointsPosMedium[pointIdx];
+        const vec3 offsetMedium = vec3(encodedMedium & 0x3FF, (encodedMedium >> 10) & 0x3FF, (encodedMedium >> 20) & 0x3FF) / (1 << 20) * batchBoxSize;
+        resultPosition += offsetMedium;
+    }
+
+    if(batchPixelExtend > 524288) {  // 2^(20 bits) = 1'048'576 different values; can accurately display BB across 524'288 pixels
+        /// add high precision
+        const uint encodedHigh = pointsPosHigh[pointIdx];
+        const vec3 offsetHigh = vec3(encodedHigh & 0x3FF, (encodedHigh >> 10) & 0x3FF, (encodedHigh >> 20) & 0x3FF) / (1 << 30) * batchBoxSize;
+        resultPosition += offsetHigh;
+    }
+
+    return resultPosition;
+}
 
 void main(){
-    // TODO: @Chrylt
-
-    const uint id = gl_GlobalInvocationID.x;
-    if (id >= workerCount){
+    const uint id = gl_GlobalInvocationID.x / gl_WorkGroupSize.x;
+    if (id >= batchCount){
         return;
     }
 
-    const uint workAmount = uint(ceil(float(batchCount) / workerCount));
-    const uint workOffset = workAmount * id;
-    
-    for (uint i = workOffset; i < workOffset + workAmount; ++i){
-        if (i >= batchCount){
-            continue;
+    const Node batch = nodes[batchList[id]];
+    const vec3 batchBBSize = vec3(batch.box.maxX, batch.box.maxY, batch.box.maxZ) - vec3(batch.box.minX, batch.box.minY, batch.box.minZ);
+    const uint batchPixelExtend = getBatchPixelExtend(batch);
+    const uint localId = gl_LocalInvocationID.x;
+    const uint pointCount = batch.maskDepthCount >> 13;
+    const uint workAmount = (pointCount / gl_WorkGroupSize.x) + 1;
+
+    for (uint k = batch.pointOffset + localId * workAmount; k < batch.pointOffset + (localId + 1) * workAmount; ++k){
+        if ((k - batch.pointOffset) >= pointCount){
+            break;
         }
 
-        const Node batchNode = nodes[batchList[i]];
-        for (uint k = batchNode.pointOffset; k < batchNode.pointOffset + (batchNode.maskDepthCount >> 13); ++k){
+        const vec4 projected = camera.projection * camera.view * vec4(getAdaptivePointPosition(batchBBSize, vec3(batch.box.minX, batch.box.minY, batch.box.minZ), batchPixelExtend, k), 1);
 
-            const vec4 projected = camera.projection * camera.view * vec4(points[k].position, 1);
+        if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
+                (-projected.w <= projected.y) && (projected.y <= projected.w) &&
+                (0.f <= projected.z) && (projected.z <= projected.w)){
+            // projection is within window
+            const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
 
-            if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
-                    (-projected.w <= projected.y) && (projected.y <= projected.w) &&
-                    (0.f <= projected.z) && (projected.z <= projected.w)){
-                // projection is within window
-                const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
+            // depth test via 32-bit-atomicMin
+            const uint depth = floatBitsToUint(projected.w);
 
-                // depth test via 64-bit-atomicMin
-                const uint depth = floatBitsToUint(projected.w);
+            const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
 
-                const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
-
-                if(depth < oldValue){
-	                imageAtomicExchange(renderTarget, ivec2(coords), points[k].rgba);
-                }
+            if(depth < oldValue){
+	            imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
             }
         }
     }
