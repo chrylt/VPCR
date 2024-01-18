@@ -40,7 +40,7 @@ layout(set = 2, binding = 1) readonly buffer BatchList{
     uint batchList[];
 };
 
-layout(local_size_x = 128) in;
+layout(local_size_x = 1024) in;
 
 void main(){
     // TODO: @Atzubi

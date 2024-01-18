@@ -10,7 +10,7 @@
 namespace
 {
 // Should match compute shaders
-constexpr std::uint32_t ComputeLaneCount = 128;
+constexpr std::uint32_t ComputeLaneCount = 1024;
 
 class VPCRImpl final : public VPCR {
 public:
@@ -206,9 +206,9 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
     const auto res = config_.Get<std::vector<std::uint32_t>>("resolution").value();
     const auto batchCount = pointCloudAcceleration_->GetBatchCount();
     clearPass->Execute(commandRecorder, res[0] / ComputeLaneCount + 1, res[1]);
-    lodPass->Execute(commandRecorder, batchCount / ComputeLaneCount + 1);
+    lodPass->Execute(commandRecorder, batchCount);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
-    projectionPass->Execute(commandRecorder, batchCount / ComputeLaneCount + 1);
+    projectionPass->Execute(commandRecorder, batchCount);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::FragmentShader);
     displayPass->Execute(commandRecorder, frameIndex);
 
