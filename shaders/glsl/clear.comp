@@ -10,7 +10,7 @@ layout(set = 0, binding = 0) uniform Camera{
 }camera;
 
 layout(set = 0, binding = 1) uniform DynamicConst{
-    uint workerCount;
+    uint totalBatchCount;
 };
 
 layout(set = 1, binding = 0, r32ui) writeonly uniform uimage2D renderTarget;

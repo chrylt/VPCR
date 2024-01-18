@@ -11,7 +11,6 @@ namespace
 {
 // Should match compute shaders
 constexpr std::uint32_t ComputeLaneCount = 128;
-constexpr std::uint32_t WorkerCount = 1000;  // TODO: get hardware thread count + heuristic
 
 class VPCRImpl final : public VPCR {
 public:
@@ -39,7 +38,7 @@ private:
 
     struct DynamicConst {
         // Misc information we need on gpu
-        std::uint32_t threadCount;
+        std::uint32_t totalBatchCount;
     };
 
     void OnUpdate(std::uint32_t frameIndex);
@@ -205,10 +204,11 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
 
     // Collect Execution Commands
     const auto res = config_.Get<std::vector<std::uint32_t>>("resolution").value();
+    const auto batchCount = pointCloudAcceleration_->GetBatchCount();
     clearPass->Execute(commandRecorder, res[0] / ComputeLaneCount + 1, res[1]);
-    lodPass->Execute(commandRecorder, WorkerCount / ComputeLaneCount + 1);
+    lodPass->Execute(commandRecorder, batchCount / ComputeLaneCount + 1);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
-    projectionPass->Execute(commandRecorder, WorkerCount / ComputeLaneCount + 1);
+    projectionPass->Execute(commandRecorder, batchCount / ComputeLaneCount + 1);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::FragmentShader);
     displayPass->Execute(commandRecorder, frameIndex);
 
@@ -224,7 +224,7 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
 
 void VPCRImpl::CreateDynamicConst()
 {
-    DynamicConst dynamicConst{WorkerCount};
+    DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount()};
 
     tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);
