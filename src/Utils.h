@@ -53,8 +53,8 @@ struct Batch {
     AABB aabb;
     std::span<Point> points;
 
-     const Batch(std::uint32_t iteration, std::uint64_t mortonCode, std::span<Point> points, AABB aabb = AABB(),
-          bool leaf = false);
+    const Batch(std::uint32_t iteration, std::uint64_t mortonCode, std::span<Point> points, AABB aabb,
+                bool leaf = false);
 
     std::vector<Batch> Subdivide() const;
 
@@ -69,3 +69,5 @@ struct BatchedPointCloud {
 };
 
 BatchedPointCloud LoadScene(std::string_view scene);
+
+AABB CreateInitializerBox();

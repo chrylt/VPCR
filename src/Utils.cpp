@@ -109,9 +109,9 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
 AABB CreateInitializerBox()
 {
     AABB aabb = {{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-            std::numeric_limits<float>::infinity()},
-           {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-            -std::numeric_limits<float>::infinity()}};
+                  std::numeric_limits<float>::infinity()},
+                 {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+                  -std::numeric_limits<float>::infinity()}};
 
     return aabb;
 }
@@ -123,7 +123,7 @@ BatchedPointCloud LoadScene(std::string_view scene)
     // Implement this https://ieeexplore.ieee.org/document/5383353
     std::sort(points.begin(), points.end());
 
-    auto batch = Batch(0U, 0ULL, std::span(points));
+    auto batch = Batch(0U, 0ULL, std::span(points), CreateInitializerBox());
 
     BatchedPointCloud batched{std::move(points), std::move(batch.Subdivide())};
     return batched;
