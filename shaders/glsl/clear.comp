@@ -1,7 +1,17 @@
 #version 460
 #extension GL_KHR_vulkan_glsl : enable
 
-#include "GLSLCommon.h"
+layout(set = 0, binding = 0) uniform Camera{
+    mat4 view;
+    mat4 projection;
+    vec3 direction;
+    vec3 position;
+    uvec2 resolution;
+}camera;
+
+layout(set = 0, binding = 1) uniform DynamicConst{
+    uint totalBatchCount;
+};
 
 layout(set = 1, binding = 0, r32ui) writeonly uniform uimage2D renderTarget;
 layout(set = 1, binding = 1, r32ui) writeonly uniform uimage2D depthBuffer;
