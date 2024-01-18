@@ -200,7 +200,7 @@ std::vector<Batch> Batch::Subdivide() const
     std::vector<Batch> result;
 
     if (points.size() < MaxBatchSize) {
-        result.push_back(Batch(id.iteration, id.mortonCode, points, aabb, true));
+        result.emplace_back(Batch(id.iteration, id.mortonCode, points, aabb, true));
     } else {
         std::vector<Batch> children;
 
