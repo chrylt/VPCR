@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -23,6 +24,15 @@ struct CompressedColor {
 struct Point {
     glm::vec3 position;
     CompressedColor color;
+
+    bool operator<(const Point& q) const;
+
+    // https://stackoverflow.com/questions/26856268/morton-index-from-2d-point-with-floats
+    static_assert((sizeof(std::uint32_t) == sizeof(float)) && (sizeof(std::uint32_t) * CHAR_BIT == 32) &&
+                      (sizeof(std::uint64_t) * CHAR_BIT == 64),
+                  "We need 32-bit ints and floats, and 64-bit long longs!");
+
+    std::uint64_t MortonIndex() const;
 };
 
 struct AABB {
@@ -30,9 +40,34 @@ struct AABB {
     alignas(16) glm::vec3 maxV;
 };
 
-struct Batch {
-    AABB aabb;
-    std::vector<Point> points;
+struct BatchID {
+    std::uint64_t mortonCode : 57;
+    std::uint64_t iteration : 5;
+    std::uint64_t leaf : 1;
+    std::uint64_t pad : 1;
 };
 
-std::vector<Batch> LoadScene(std::string_view scene);
+struct Batch {
+    BatchID id;
+
+    AABB aabb;
+    std::span<Point> points;
+
+    Batch(std::uint32_t iteration, std::uint64_t mortonCode, std::span<Point> points, AABB aabb,
+                bool leaf = false);
+
+    std::vector<Batch> Subdivide() const;
+
+private:
+    std::uint32_t MortonToNodeID(std::uint64_t mortonCode) const;
+    std::uint64_t NodeIDToMorton(std::uint32_t nodeID) const;
+};
+
+struct BatchedPointCloud {
+    std::vector<Point> points;
+    std::vector<Batch> batches;
+};
+
+BatchedPointCloud LoadScene(std::string_view scene);
+
+AABB CreateInitializerBox();
