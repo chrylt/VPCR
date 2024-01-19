@@ -27,6 +27,7 @@ public:
     glm::vec3 GetDirection() const;
     float GetJaw() const;
     float GetPitch() const;
+    glm::vec2 GetResolution() const;
 
     ~TGACamera();
 

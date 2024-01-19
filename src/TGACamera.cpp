@@ -50,6 +50,8 @@ glm::vec3 TGACamera::GetDirection() const { return direction_; }
 float TGACamera::GetJaw() const { return jaw_; }
 float TGACamera::GetPitch() const { return pitch_; }
 
+glm::vec2 TGACamera::GetResolution() const { return cam_.resolution; }
+
 TGACamera::~TGACamera()
 {
     backend_.free(staging_);

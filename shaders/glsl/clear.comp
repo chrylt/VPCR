@@ -1,5 +1,7 @@
 #version 460
+#extension GL_ARB_gpu_shader_int64 : enable
 #extension GL_KHR_vulkan_glsl : enable
+#include "utility_common.glsl"
 
 layout(set = 0, binding = 0) uniform Camera{
     mat4 view;
@@ -13,8 +15,11 @@ layout(set = 0, binding = 1) uniform DynamicConst{
     uint workerCount;
 };
 
-layout(set = 1, binding = 0, r32ui) writeonly uniform uimage2D renderTarget;
-layout(set = 1, binding = 1, r32ui) writeonly uniform uimage2D depthBuffer;
+layout(set = 1, binding = 0) buffer RENDER_TARGET{
+    uint64_t renderTarget[];
+};
+
+layout(set = 1, binding = 1, r32ui) uniform uimage2D depthBuffer;
 
 layout(local_size_x = 128) in;
 
@@ -25,6 +30,6 @@ void main()
         return;
     }
 
-    imageStore(renderTarget, id, uvec4(0));
+    renderTarget[getPixelID(camera.resolution, id)] = uint64_t(0);
     imageStore(depthBuffer, id, uvec4(0xFFFFFFFF)); // depth-test assumes maximum depth in empty depth-buffer for atomic-min-operation
 }

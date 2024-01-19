@@ -1,38 +1,5 @@
-#version 460
-#extension GL_ARB_gpu_shader_int64 : enable
-#extension GL_KHR_vulkan_glsl : enable
 
-struct Point{
-    vec3 position;
-    uint rgba;
-};
-
-struct AABB{
-    vec3 minV;
-    vec3 maxV;
-};
-
-struct Batch{
-    AABB box;
-    uint pointOffset;
-    uint pointCount;
-};
-
-layout(set = 0, binding = 0) uniform Camera{
-    mat4 view;
-    mat4 projection;
-    vec3 direction;
-    vec3 position;
-    uvec2 resolution;
-}camera;
-
-layout(set = 0, binding = 1) uniform DynamicConst{
-    uint workerCount;
-};
-
-layout(set = 1, binding = 0, r32ui) uniform uimage2D renderTarget;
-layout(set = 1, binding = 1, r32ui) uniform uimage2D depthBuffer;
-
+// common buffers
 layout(set = 2, binding = 0) readonly buffer Points_Position_low_Precision{
     uint pointsPosLow[];
 };
@@ -45,22 +12,7 @@ layout(set = 2, binding = 2) readonly buffer Points_Position_high_Precision{
     uint pointsPosHigh[];
 };
 
-layout(set = 2, binding = 3) buffer Points_Color{
-    uint pointsRgba[];
-};
-
-layout(set = 3, binding = 0) readonly buffer Batches{
-    Batch batches[];  
-};
-
-layout(set = 3, binding = 1) readonly buffer BatchList{
-    uint batchCount;
-    uint batchList[];
-};
-
-layout(local_size_x = 128) in;
-
-uint getBatchPixelExtend(const Batch currBatch){
+uint getBatchPixelExtend(const Batch currBatch, const uvec2 resolution, const mat4 projection, const mat4 view){
     // determine precision by projecting batch aabb to screen
     /// create aabb corner points
     const vec3[8] aabbCorners = vec3[](
@@ -75,14 +27,14 @@ uint getBatchPixelExtend(const Batch currBatch){
     );
 
     /// find aabb extend on screen
-    uvec2 screenMin = camera.resolution;
+    uvec2 screenMin = resolution;
     uvec2 screenMax = uvec2(0);
 
     for(uint i = 0; i < 8; ++i){
         /// transform aabb & perspective divide
-        const vec4 divReady = camera.projection * camera.view * vec4(aabbCorners[i], 1);
+        const vec4 divReady = projection * view * vec4(aabbCorners[i], 1);
         const vec2 divided = (divReady / abs(divReady.w)).xy;
-        const vec2 pixelSpace = ((divided + 1) / 2) * camera.resolution;
+        const vec2 pixelSpace = ((divided + 1) / 2) * resolution;
 
         screenMin = ivec2(min(screenMin.x, pixelSpace.x), min(screenMin.y, pixelSpace.y));
         screenMax = ivec2(max(screenMax.x, pixelSpace.x), max(screenMax.y, pixelSpace.y));
@@ -116,45 +68,4 @@ vec3 getAdaptivePointPosition(const vec3 batchBoxSize, const vec3 batchBoxMin, c
     }
 
     return resultPosition;
-}
-
-void main(){
-
-    const uint id = gl_GlobalInvocationID.x;
-    if (id >= workerCount){
-        return;
-    }
-
-    const uint workAmount = uint(ceil(float(batchCount) / workerCount));
-    const uint workOffset = workAmount * id;
-
-    for (uint i = workOffset; i < workOffset + workAmount; ++i){
-        if (i >= batchCount){
-            continue;
-        }
-        const Batch batch = batches[batchList[i]];
-        const vec3 batchBBSize = batch.box.maxV - batch.box.minV;
-        const uint batchPixelExtend = getBatchPixelExtend(batch);
-
-        for (uint k = batch.pointOffset; k < batch.pointOffset + batch.pointCount; ++k){
-
-            const vec4 projected = camera.projection * camera.view * vec4(getAdaptivePointPosition(batchBBSize, batch.box.minV, batchPixelExtend, k), 1);
-
-            if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
-                    (-projected.w <= projected.y) && (projected.y <= projected.w) &&
-                    (0.f <= projected.z) && (projected.z <= projected.w)){
-                // projection is within window
-                const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
-
-                // depth test via 64-bit-atomicMin
-                const uint depth = floatBitsToUint(projected.w);
-
-                const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
-
-                if(depth < oldValue){
-	                imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
-                }
-            }
-        }
-    }
 }
