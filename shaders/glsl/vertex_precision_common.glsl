@@ -1,5 +1,4 @@
 
-// common buffers
 layout(set = 2, binding = 0) readonly buffer Points_Position_low_Precision{
     uint pointsPosLow[];
 };
@@ -13,6 +12,7 @@ layout(set = 2, binding = 2) readonly buffer Points_Position_high_Precision{
 };
 
 uint getBatchPixelExtend(const Batch currBatch, const uvec2 resolution, const mat4 projection, const mat4 view){
+
     // determine precision by projecting batch aabb to screen
     /// create aabb corner points
     const vec3[8] aabbCorners = vec3[](
