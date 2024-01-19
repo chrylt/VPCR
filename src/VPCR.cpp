@@ -213,6 +213,7 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
     lodPass->Execute(commandRecorder, batchCount);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
     depthPass->Execute(commandRecorder, batchCount);
+    commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
     colorPass->Execute(commandRecorder, batchCount);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::FragmentShader);
     displayPass->Execute(commandRecorder, frameIndex);

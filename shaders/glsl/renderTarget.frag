@@ -31,4 +31,10 @@ void main()
     float g = float((storedValue >> 32) & 0xFFFF) / counter;
     float b = float((storedValue >> 16) & 0xFFFF) / counter;
     color = vec4(vec3(r, g, b) / 255, 1);
+
+    if(counter >= 255)
+    {
+        // overflow detected
+        color = vec4(1, 0, 0, 1);
+    }
 }
