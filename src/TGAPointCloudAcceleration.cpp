@@ -38,7 +38,7 @@ std::vector<Point> SampleLeafs(const std::uint32_t maxCount, const std::uint64_t
     // Find out how many matching batches there are
     std::vector<Batch *> matches;
     for (auto& batch : batches) {
-        if ((batch.points.size() > 0) &&
+        if ((batch.points.size() > 0) && (batch.id.iteration >= iteration) &&
             ((batch.GetMortonCode() >> ((batch.id.iteration - iteration) * 3)) == prefix)) {
             matches.push_back(&batch);
         }
@@ -63,7 +63,7 @@ std::vector<Point> SampleLeafs(const std::uint32_t maxCount, const std::uint64_t
             std::uniform_int_distribution<std::uint32_t>(0, static_cast<std::uint32_t>(batch->points.size() - 1))(rng);
         sampledPoints.push_back(std::move(batch->points[pointChoice]));
         batch->points[pointChoice] = batch->points.back();
-        batch->points.subspan(0, batch->points.size() - 1);
+        batch->points = batch->points.subspan(0, batch->points.size() - 1);
 
         // If batch is now empty, remove it
         if (batch->points.size() == 0) {
@@ -90,8 +90,7 @@ FlatLODTree CreateLODTree(const std::string_view scenePath)
     std::uint8_t maxIteration = 0;
     std::uint32_t offset = 0;
     for (const auto& batch : originalBatches) {
-        layeredTree[batch.id.iteration][batch.GetMortonCode()] = {batch.aabb, offset,
-                                                                  static_cast<std::uint32_t>(batch.points.size()), 0};
+        layeredTree[batch.id.iteration][batch.GetMortonCode()] = {};
         offset += static_cast<std::uint32_t>(batch.points.size());
         maxIteration = std::max(static_cast<std::uint8_t>(batch.id.iteration), maxIteration);
     }
@@ -121,7 +120,7 @@ FlatLODTree CreateLODTree(const std::string_view scenePath)
         auto& layer = layeredTree[i];
         for (auto& [code, node] : layer) {
             // Pull points from leaf level
-            auto sampledPoints = SampleLeafs(MaxBatchSize, code, i, originalBatches);
+            const auto sampledPoints = SampleLeafs(MaxBatchSize, code, i, originalBatches);
             if (sampledPoints.empty()) {
                 continue;
             }
@@ -134,10 +133,10 @@ FlatLODTree CreateLODTree(const std::string_view scenePath)
                  -std::numeric_limits<float>::infinity()},
             };
             node.pointOffset = static_cast<std::uint32_t>(points.size());
-            for (auto& point : sampledPoints) {
+            for (const auto& point : sampledPoints) {
                 box.minV = glm::min(box.minV, point.position);
                 box.maxV = glm::max(box.maxV, point.position);
-                points.push_back(std::move(point));
+                points.push_back(point);
             }
 
             if (i != rootLevel) {
