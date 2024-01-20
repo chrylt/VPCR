@@ -119,14 +119,11 @@ AABB CreateInitializerBox()
 BatchedPointCloud LoadScene(std::string_view scene)
 {
     auto points = LoadScenePoints(scene);
-    // TODO add a hashmap for morton code to make this faster or
-    // Implement this https://ieeexplore.ieee.org/document/5383353
     std::sort(points.begin(), points.end());
 
-    auto batch = Batch(0U, 0ULL, std::span(points), CreateInitializerBox());
+    const auto batch = Batch(0U, 0ULL, std::span(points), CreateInitializerBox());
 
-    BatchedPointCloud batched{std::move(points), std::move(batch.Subdivide())};
-    return batched;
+    return {std::move(points), batch.Subdivide()};
 }
 
 bool Point::operator<(const Point& q) const { return this->MortonIndex() < q.MortonIndex(); }
