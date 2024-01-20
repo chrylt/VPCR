@@ -1,10 +1,10 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <vector>
-#include <optional>
 
 constexpr auto MaxBatchSize = 8192;
 
@@ -35,7 +35,7 @@ struct Point {
 
     std::uint64_t MortonIndex() const;
 
-    private:
+private:
     mutable std::optional<std::uint64_t> mortonCache_;
 };
 
@@ -57,8 +57,7 @@ struct Batch {
     AABB aabb;
     std::span<Point> points;
 
-    Batch(std::uint32_t iteration, std::uint64_t mortonCode, std::span<Point> points, AABB aabb,
-                bool leaf = false);
+    Batch(std::uint32_t iteration, std::uint64_t mortonCode, std::span<Point> points, AABB aabb, bool leaf = false);
 
     std::vector<Batch> Subdivide() const;
 
