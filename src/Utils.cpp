@@ -133,6 +133,10 @@ bool Point::operator<(const Point& q) const { return this->MortonIndex() < q.Mor
 
 std::uint64_t Point::MortonIndex() const
 {
+    if (mortonCache_.has_value()) {
+        return mortonCache_.value();
+    }
+
     auto ix = reinterpret_cast<const std::uint32_t&>(position.x);
     auto iy = reinterpret_cast<const std::uint32_t&>(position.y);
     auto iz = reinterpret_cast<const std::uint32_t&>(position.z);
@@ -176,7 +180,8 @@ std::uint64_t Point::MortonIndex() const
     yy = (yy | (yy << 2U)) & 0x1249249249249249LL;
     zz = (zz | (zz << 2U)) & 0x1249249249249249LL;
 
-    return xx | (yy << 1U) | (zz << 2U);
+    mortonCache_ = xx | (yy << 1U) | (zz << 2U);
+    return mortonCache_.value();
 }
 
 Batch::Batch(const std::uint32_t iteration, const std::uint64_t mortonCode, const std::span<Point> inPoints,

@@ -4,6 +4,7 @@
 #include <span>
 #include <string_view>
 #include <vector>
+#include <optional>
 
 constexpr auto MaxBatchSize = 8192;
 
@@ -33,6 +34,9 @@ struct Point {
                   "We need 32-bit ints and floats, and 64-bit long longs!");
 
     std::uint64_t MortonIndex() const;
+
+    private:
+    mutable std::optional<std::uint64_t> mortonCache_;
 };
 
 struct AABB {
