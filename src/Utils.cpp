@@ -200,7 +200,7 @@ std::vector<Batch> Batch::Subdivide() const
     std::vector<Batch> result;
 
     if (points.size() < MaxBatchSize) {
-        result.push_back(Batch(id.iteration + 1, NodeIDToMorton(id.iteration), points, aabb, true));
+        result.emplace_back(id.iteration, id.mortonCode, points, aabb, true);
     } else {
         std::vector<Batch> children;
 
@@ -216,8 +216,8 @@ std::vector<Batch> Batch::Subdivide() const
 
             // if NodeID changed
             if (prevPointNodeID != currPointNodeID) {
-                children.emplace_back(
-                    Batch(id.iteration + 1, NodeIDToMorton(prevPointNodeID), points.subspan(offset, count), box));
+                children.emplace_back(id.iteration + 1, NodeIDToMorton(prevPointNodeID), points.subspan(offset, count),
+                                      box);
 
                 offset += count;
                 count = 0;
@@ -231,8 +231,8 @@ std::vector<Batch> Batch::Subdivide() const
         }
         // check if last node has elements and add it
         if (count != 0) {
-            children.emplace_back(
-                Batch(id.iteration + 1, NodeIDToMorton(prevPointNodeID), points.subspan(offset, count), box));
+            children.emplace_back(id.iteration + 1, NodeIDToMorton(prevPointNodeID), points.subspan(offset, count),
+                                  box);
         }
 
         // combine subdivide results
