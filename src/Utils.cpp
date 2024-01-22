@@ -3,8 +3,8 @@
 #define TINYGLTF_IMPLEMENTATION
 #include <tinygltf/tiny_gltf.h>
 
-#include <iostream>
 #include <execution>
+#include <iostream>
 
 namespace
 {
@@ -94,7 +94,7 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
     return points;
 }
 
-bmp::uint1024_t MortonIndex768(const Point p, float quantizationFactor)
+bmp::uint1024_t MortonIndex768(const Point p, const float quantizationFactor)
 {
     using namespace bmp::literals;
 
@@ -212,14 +212,14 @@ BatchedPointCloud LoadScene(std::string_view scene)
 {
     auto points = LoadScenePoints(scene);
 
-    //Get smallest distance between points.
+    // Get smallest distance between points.
     float smallestDistance = 1.0f;
-    for (std::uint64_t i = 0; i < points.size()-1; ++i) {
+    for (std::uint64_t i = 0; i < points.size() - 1; ++i) {
         smallestDistance = glm::min(smallestDistance, glm::distance(points[i].position, points[i + 1].position));
     }
     smallestDistance *= 10.0f;
 
-    for (auto& point: points) {
+    for (auto& point : points) {
         point.mortonCode = MortonIndex768(point, smallestDistance);
     }
     std::sort(std::execution::par_unseq, points.begin(), points.end());

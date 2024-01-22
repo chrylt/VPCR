@@ -1,11 +1,10 @@
 #pragma once
 
+#include <boost/multiprecision/cpp_int.hpp>
 #include <glm/glm.hpp>
 #include <span>
 #include <string_view>
 #include <vector>
-
-#include <boost/multiprecision/cpp_int.hpp>
 namespace bmp = boost::multiprecision;
 
 constexpr auto MaxBatchSize = 8192;
@@ -41,7 +40,7 @@ struct BatchID {
     bmp::uint1024_t mortonCode;
     std::uint16_t iteration : 12;
     std::uint16_t leaf : 1;
-    std::uint16_t pad : 3;
+    std::uint16_t padding : 3;
 };
 
 struct Batch {
@@ -50,8 +49,7 @@ struct Batch {
     AABB aabb;
     std::span<Point> points;
 
-    Batch(std::uint32_t iteration, bmp::uint1024_t mortonCode, std::span<Point> points, AABB aabb,
-                bool leaf = false);
+    Batch(std::uint32_t iteration, bmp::uint1024_t mortonCode, std::span<Point> points, AABB aabb, bool leaf = false);
 
     std::vector<Batch> Subdivide() const;
 
