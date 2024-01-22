@@ -5,6 +5,9 @@
 #include <string_view>
 #include <vector>
 
+#include <boost/multiprecision/cpp_int.hpp>
+namespace bmp = boost::multiprecision;
+
 constexpr auto MaxBatchSize = 8192;
 
 struct CompressedPosition {
@@ -24,15 +27,9 @@ struct CompressedColor {
 struct Point {
     glm::vec3 position;
     CompressedColor color;
+    bmp::uint1024_t mortonCode;
 
     bool operator<(const Point& q) const;
-
-    // https://stackoverflow.com/questions/26856268/morton-index-from-2d-point-with-floats
-    static_assert((sizeof(std::uint32_t) == sizeof(float)) && (sizeof(std::uint32_t) * CHAR_BIT == 32) &&
-                      (sizeof(std::uint64_t) * CHAR_BIT == 64),
-                  "We need 32-bit ints and floats, and 64-bit long longs!");
-
-    std::uint64_t MortonIndex() const;
 };
 
 struct AABB {
@@ -41,10 +38,10 @@ struct AABB {
 };
 
 struct BatchID {
-    std::uint64_t mortonCode : 57;
-    std::uint64_t iteration : 5;
-    std::uint64_t leaf : 1;
-    std::uint64_t pad : 1;
+    bmp::uint1024_t mortonCode;
+    std::uint16_t iteration : 12;
+    std::uint16_t leaf : 1;
+    std::uint16_t pad : 3;
 };
 
 struct Batch {
@@ -53,14 +50,14 @@ struct Batch {
     AABB aabb;
     std::span<Point> points;
 
-    Batch(std::uint32_t iteration, std::uint64_t mortonCode, std::span<Point> points, AABB aabb,
+    Batch(std::uint32_t iteration, bmp::uint1024_t mortonCode, std::span<Point> points, AABB aabb,
                 bool leaf = false);
 
     std::vector<Batch> Subdivide() const;
 
 private:
-    std::uint32_t MortonToNodeID(std::uint64_t mortonCode) const;
-    std::uint64_t NodeIDToMorton(std::uint32_t nodeID) const;
+    std::uint32_t MortonToNodeID(bmp::uint1024_t mortonCode) const;
+    bmp::uint1024_t NodeIDToMorton(std::uint32_t nodeID) const;
 };
 
 struct BatchedPointCloud {

@@ -4,6 +4,7 @@
 #include <tinygltf/tiny_gltf.h>
 
 #include <iostream>
+#include <execution>
 
 namespace
 {
@@ -38,14 +39,6 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
 
     const auto model = LoadModel(scene);
 
-    auto modelMatrix = glm::mat4(1.0);
-    if (!model.nodes.empty()) {
-        const auto& matrix = model.nodes[0].matrix;
-        modelMatrix =
-            glm::mat4(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5], matrix[6], matrix[7], matrix[8],
-                      matrix[9], matrix[10], matrix[11], matrix[12], matrix[13], matrix[14], matrix[15]);
-    }
-
     std::size_t totalPointCount = 0;
     for (const auto& mesh : model.meshes) {
         for (const auto& primitive : mesh.primitives) {
@@ -75,10 +68,7 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
 
                 if (accessorName == "POSITION") {
                     for (std::uint32_t i = 0; i < primPointCount; ++i) {
-                        glm::vec4 position = glm::vec4(0, 0, 0, 1);
-                        memcpy(&position, &buffer[bufferOffset + i * stride], stride);
-
-                        points[currentPointCount + i].position = modelMatrix * position;
+                        memcpy(&points[currentPointCount + i].position, &buffer[bufferOffset + i * stride], stride);
                     }
                 } else if (accessorName.substr(0, 5) == "COLOR") {
                     for (std::uint32_t i = 0; i < primPointCount; ++i) {
@@ -104,6 +94,108 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
     return points;
 }
 
+bmp::uint1024_t MortonIndex768(const Point p, float quantizationFactor)
+{
+    using namespace bmp::literals;
+
+    bmp::int256_t ix, iy, iz;
+    ix.assign(static_cast<double>(p.position.x) / quantizationFactor);
+    iy.assign(static_cast<double>(p.position.y) / quantizationFactor);
+    iz.assign(static_cast<double>(p.position.z) / quantizationFactor);
+
+    // Converts a signed value to an unsigned value.
+    const bmp::uint256_t bias = 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff_cppui256;
+    ix = ix.backend().isneg() ? -ix : ix + bias;
+    iy = iy.backend().isneg() ? -iy : iy + bias;
+    iz = iz.backend().isneg() ? -iz : iz + bias;
+
+    bmp::uint1024_t xx = ix.convert_to<bmp::uint1024_t>();
+    bmp::uint1024_t yy = iy.convert_to<bmp::uint1024_t>();
+    bmp::uint1024_t zz = iz.convert_to<bmp::uint1024_t>();
+
+    // Dilate and combine
+    xx =
+        (xx | (xx << 256U)) &
+        0x0000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffff_cppui1024;
+    yy =
+        (yy | (yy << 256U)) &
+        0x0000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffff_cppui1024;
+    zz =
+        (zz | (zz << 256U)) &
+        0x0000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffff_cppui1024;
+
+    xx =
+        (xx | (xx << 128U)) &
+        0x00000000000000000000000000000000ffffffffffffffff00000000000000000000000000000000ffffffffffffffff00000000000000000000000000000000ffffffffffffffff00000000000000000000000000000000ffffffffffffffff_cppui1024;
+    yy =
+        (yy | (yy << 128U)) &
+        0x00000000000000000000000000000000ffffffffffffffff00000000000000000000000000000000ffffffffffffffff00000000000000000000000000000000ffffffffffffffff00000000000000000000000000000000ffffffffffffffff_cppui1024;
+    zz =
+        (zz | (zz << 128U)) &
+        0x00000000000000000000000000000000ffffffffffffffff00000000000000000000000000000000ffffffffffffffff00000000000000000000000000000000ffffffffffffffff00000000000000000000000000000000ffffffffffffffff_cppui1024;
+
+    xx =
+        (xx | (xx << 64U)) &
+        0x0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff_cppui1024;
+    yy =
+        (yy | (yy << 64U)) &
+        0x0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff_cppui1024;
+    zz =
+        (zz | (zz << 64U)) &
+        0x0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff0000000000000000ffffffff_cppui1024;
+
+    xx =
+        (xx | (xx << 32U)) &
+        0x00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff_cppui1024;
+    yy =
+        (yy | (yy << 32U)) &
+        0x00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff_cppui1024;
+    zz =
+        (zz | (zz << 32U)) &
+        0x00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff00000000ffff_cppui1024;
+
+    xx =
+        (xx | (xx << 16U)) &
+        0x0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff_cppui1024;
+    yy =
+        (yy | (yy << 16U)) &
+        0x0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff_cppui1024;
+    zz =
+        (zz | (zz << 16U)) &
+        0x0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff0000ff_cppui1024;
+
+    xx =
+        (xx | (xx << 8U)) &
+        0x00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f_cppui1024;
+    yy =
+        (yy | (yy << 8U)) &
+        0x00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f_cppui1024;
+    zz =
+        (zz | (zz << 8U)) &
+        0x00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f_cppui1024;
+
+    xx =
+        (xx | (xx << 4U)) &
+        0x0c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c3_cppui1024;
+    yy =
+        (yy | (yy << 4U)) &
+        0x0c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c3_cppui1024;
+    zz =
+        (zz | (zz << 4U)) &
+        0x0c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c30c3_cppui1024;
+
+    xx =
+        (xx | (xx << 2U)) &
+        0x249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249_cppui1024;
+    yy =
+        (yy | (yy << 2U)) &
+        0x249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249_cppui1024;
+    zz =
+        (zz | (zz << 2U)) &
+        0x249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249249_cppui1024;
+
+    return xx | (yy << 1U) | (zz << 2U);
+}
 }  // namespace
 
 AABB CreateInitializerBox()
@@ -119,71 +211,31 @@ AABB CreateInitializerBox()
 BatchedPointCloud LoadScene(std::string_view scene)
 {
     auto points = LoadScenePoints(scene);
-    // TODO add a hashmap for morton code to make this faster or
-    // Implement this https://ieeexplore.ieee.org/document/5383353
-    std::sort(points.begin(), points.end());
+
+    //Get smallest distance between points.
+    float smallestDistance = 1.0f;
+    for (std::uint64_t i = 0; i < points.size()-1; ++i) {
+        smallestDistance = glm::min(smallestDistance, glm::distance(points[i].position, points[i + 1].position));
+    }
+    smallestDistance *= 10.0f;
+
+    for (auto& point: points) {
+        point.mortonCode = MortonIndex768(point, smallestDistance);
+    }
+    std::sort(std::execution::par_unseq, points.begin(), points.end());
 
     auto batch = Batch(0U, 0ULL, std::span(points), CreateInitializerBox());
-
     BatchedPointCloud batched{std::move(points), std::move(batch.Subdivide())};
     return batched;
 }
 
-bool Point::operator<(const Point& q) const { return this->MortonIndex() < q.MortonIndex(); }
+bool Point::operator<(const Point& q) const { return mortonCode < q.mortonCode; }
 
-std::uint64_t Point::MortonIndex() const
-{
-    auto ix = reinterpret_cast<const std::uint32_t&>(position.x);
-    auto iy = reinterpret_cast<const std::uint32_t&>(position.y);
-    auto iz = reinterpret_cast<const std::uint32_t&>(position.z);
-
-    // Get signed bit
-    const auto ixs = static_cast<const std::int32_t>(ix) >> 31U;
-    const auto iys = static_cast<const std::int32_t>(iy) >> 31U;
-    const auto izs = static_cast<const std::int32_t>(iz) >> 31U;
-
-    // This is a combination of a fast absolute value and a bias.
-    //
-    // We need to adjust the values so -FLT_MAX is close to 0.
-    //
-    ix = (((ix & 0x7FFFFFFFUL) ^ ixs) - ixs) + 0x7FFFFFFFUL;
-    iy = (((iy & 0x7FFFFFFFUL) ^ iys) - iys) + 0x7FFFFFFFUL;
-    iz = (((iz & 0x7FFFFFFFUL) ^ izs) - izs) + 0x7FFFFFFFUL;
-
-    // We will only use the 21 MSBs
-    std::uint64_t xx = ix >> 11U;
-    std::uint64_t yy = iy >> 11U;
-    std::uint64_t zz = iz >> 11U;
-
-    // Dilate and combine
-    xx = (xx | (xx << 32U)) & 0x001f00000000ffffLL;
-    yy = (yy | (yy << 32U)) & 0x001f00000000ffffLL;
-    zz = (zz | (zz << 32U)) & 0x001f00000000ffffLL;
-
-    xx = (xx | (xx << 16U)) & 0x001f0000ff0000ffLL;
-    yy = (yy | (yy << 16U)) & 0x001f0000ff0000ffLL;
-    zz = (zz | (zz << 16U)) & 0x001f0000ff0000ffLL;
-
-    xx = (xx | (xx << 8U)) & 0x100f00f00f00f00fLL;
-    yy = (yy | (yy << 8U)) & 0x100f00f00f00f00fLL;
-    zz = (zz | (zz << 8U)) & 0x100f00f00f00f00fLL;
-
-    xx = (xx | (xx << 4U)) & 0x10c30c30c30c30c3LL;
-    yy = (yy | (yy << 4U)) & 0x10c30c30c30c30c3LL;
-    zz = (zz | (zz << 4U)) & 0x10c30c30c30c30c3LL;
-
-    xx = (xx | (xx << 2U)) & 0x1249249249249249LL;
-    yy = (yy | (yy << 2U)) & 0x1249249249249249LL;
-    zz = (zz | (zz << 2U)) & 0x1249249249249249LL;
-
-    return xx | (yy << 1U) | (zz << 2U);
-}
-
-Batch::Batch(const std::uint32_t iteration, const std::uint64_t mortonCode, const std::span<Point> inPoints,
+Batch::Batch(const std::uint32_t iteration, const bmp::uint1024_t mortonCode, const std::span<Point> inPoints,
              const AABB box, const bool isLeaf)
 {
-    // we only support tree depth up to 18
-    if (iteration > 18) {
+    // we only support tree depth up to 256
+    if (iteration > 256) {
         throw std::runtime_error("Tree exceded maximum supported depth");
     }
 
@@ -207,12 +259,13 @@ std::vector<Batch> Batch::Subdivide() const
         std::uint32_t count = 0;
         std::uint32_t offset = 0;
         AABB box = CreateInitializerBox();
-        auto prevPointNodeID = MortonToNodeID(points.begin()->MortonIndex());
+        auto prevPointNodeID = MortonToNodeID(points.begin()->mortonCode);
+
         // splitting points into octree nodes
         // points_ is already sorted by morton code so points related to the same node are in a contiguous range.
         // Just find the range and set the span
         for (auto& point : points) {
-            const auto currPointNodeID = MortonToNodeID(point.MortonIndex());
+            const auto currPointNodeID = MortonToNodeID(point.mortonCode);
 
             // if NodeID changed
             if (prevPointNodeID != currPointNodeID) {
@@ -245,16 +298,16 @@ std::vector<Batch> Batch::Subdivide() const
     return result;
 }
 
-std::uint32_t Batch::MortonToNodeID(const std::uint64_t mortonCode) const
+std::uint32_t Batch::MortonToNodeID(const bmp::uint1024_t mortonCode) const
 {
     // NodeID is a three bit number taken of the morton code according to node level in the tree.
-    // iteration(Node Level) 0 means the root Node. MortonCode used is a 63 bit mortoncode. Mask with 0b0111.
-    return (mortonCode >> (60U - id.iteration * 3U)) & 0x7U;
+    // iteration(Node Level) 0 means the root Node. MortonCode used is a 768 bit mortoncode. Mask with 0b0111.
+    return ((mortonCode >> (765U - id.iteration * 3U)) & 0x7U).convert_to<uint32_t>();
 }
 
-std::uint64_t Batch::NodeIDToMorton(const std::uint32_t nodeID) const
+bmp::uint1024_t Batch::NodeIDToMorton(const std::uint32_t nodeID) const
 {
-    // MortonCode limit used by the tree is 57 bits.
+    // MortonCode limit used by the tree is 768 bits.
     // To get the Morton Code: shift the nodeID to correct iteartion bits and combine with parents Morton code.
-    return (static_cast<std::uint64_t>(nodeID) << (54U - id.iteration * 3U)) | id.mortonCode;
+    return (static_cast<bmp::uint1024_t>(nodeID) << (765U - id.iteration * 3U)) | id.mortonCode;
 }
