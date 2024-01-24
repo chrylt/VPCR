@@ -1,9 +1,16 @@
 #include "TGAPointCloudAcceleration.h"
 
+#include <span>
+
 #include "Utils.h"
 
 namespace
 {
+struct Batch {
+    AABB aabb;
+    std::span<const MortonPoint> points;
+};
+
 struct BatchesCompressed {
     std::vector<CompressedPosition> lowPrecisions;
     std::vector<CompressedPosition> mediumPrecisions;
@@ -24,9 +31,9 @@ BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch>& batches)
     colors.reserve(batches.size() * MaxBatchSize);
 
     for (const auto& batch : batches) {
-        for (const auto& point : batch.points) {
+        for (const auto& mortonPoint : batch.points) {
             // Compress position and split into multiple buffers
-            const glm::vec3& floatPos = point.position;
+            const glm::vec3& floatPos = mortonPoint.point.position;
             const glm::vec3 aabbSize = batch.aabb.maxV - batch.aabb.minV;
 
             // convert float position to 30-bit fixed precision relative to BB
@@ -48,7 +55,7 @@ BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch>& batches)
                                         0);  // take lowest 10 bit as high precision
 
             // Pass on colors
-            colors.emplace_back(point.color);
+            colors.emplace_back(mortonPoint.point.color);
         }
     }
 
@@ -61,8 +68,23 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
 {
     // TODO: @Atzubi
 
-    auto batchedPointCloud = LoadScene(scenePath);
-    const auto& batches = batchedPointCloud.batches;
+    const auto mortonPoints = LoadScene(scenePath);
+    std::vector<Batch> batches;
+    for (std::size_t i = 0; i < mortonPoints.size(); i += MaxBatchSize) {
+        batches.push_back(Batch{{},
+                                std::span(mortonPoints.begin() + i,
+                                          mortonPoints.begin() + std::min(i + MaxBatchSize, mortonPoints.size()))});
+    }
+
+    for (auto& batch : batches) {
+        auto& box = batch.aabb;
+        box = CreateInitializerBox();
+        for (const auto& mortonPoint : batch.points) {
+            box.minV = glm::min(mortonPoint.point.position, box.minV);
+            box.maxV = glm::max(mortonPoint.point.position, box.maxV);
+        }
+    }
+
     batchCount_ = static_cast<std::uint32_t>(batches.size());
 
     // Create buffers for points

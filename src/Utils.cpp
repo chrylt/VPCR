@@ -4,12 +4,12 @@
 #include <tinygltf/tiny_gltf.h>
 
 #include <execution>
-#include <iostream>
+#include <unordered_set>
 
 namespace
 {
 // Throws exception if model was not loaded. Either no file or faulty gltf.
-auto LoadModel(const std::string_view filename)
+tinygltf::Model LoadModel(const std::string_view filename)
 {
     tinygltf::Model model;
 
@@ -33,75 +33,14 @@ auto LoadModel(const std::string_view filename)
     return model;
 }
 
-std::vector<Point> LoadScenePoints(const std::string_view scene)
-{
-    std::vector<Point> points;
-
-    const auto model = LoadModel(scene);
-
-    std::size_t totalPointCount = 0;
-    for (const auto& mesh : model.meshes) {
-        for (const auto& primitive : mesh.primitives) {
-            for (const auto& [accessorName, accessorID] : primitive.attributes) {
-                totalPointCount += model.accessors[accessorID].count;
-                break;
-            }
-        }
-    }
-    points.resize(totalPointCount);
-
-    std::size_t currentPointCount = 0;
-    for (const auto& mesh : model.meshes) {
-        for (const auto& primitive : mesh.primitives) {
-            for (const auto& [accessorName, accessorID] : primitive.attributes) {
-                const auto& accessor = model.accessors[accessorID];
-
-                const auto bufferViewID = accessor.bufferView;
-                const auto& bufferView = model.bufferViews[bufferViewID];
-
-                const auto bufferID = bufferView.buffer;
-                const auto& buffer = model.buffers[bufferID].data;
-
-                const auto primPointCount = accessor.count;
-                const auto bufferOffset = accessor.byteOffset + bufferView.byteOffset;
-                const auto stride = accessor.ByteStride(bufferView);
-
-                if (accessorName == "POSITION") {
-                    for (std::uint32_t i = 0; i < primPointCount; ++i) {
-                        memcpy(&points[currentPointCount + i].position, &buffer[bufferOffset + i * stride], stride);
-                    }
-                } else if (accessorName.substr(0, 5) == "COLOR") {
-                    for (std::uint32_t i = 0; i < primPointCount; ++i) {
-                        glm::vec4 fColor;
-                        memcpy(&fColor, &buffer[bufferOffset + i * stride], stride);
-
-                        points[currentPointCount + i].color.r = static_cast<std::uint8_t>(fColor.r * 255);
-                        points[currentPointCount + i].color.g = static_cast<std::uint8_t>(fColor.g * 255);
-                        points[currentPointCount + i].color.b = static_cast<std::uint8_t>(fColor.b * 255);
-                        points[currentPointCount + i].color.a = 255;
-                    }
-                }
-            }
-
-            // get count from first attribute
-            if (!primitive.attributes.empty()) {
-                const auto& attribute = primitive.attributes.begin()->second;
-                currentPointCount += model.accessors[attribute].count;
-            }
-        }
-    }
-
-    return points;
-}
-
-bmp::uint1024_t MortonIndex768(const Point p, const float quantizationFactor)
+bmp::uint1024_t MortonIndex768(const Point p, const double quantizationFactor)
 {
     using namespace bmp::literals;
 
     bmp::int256_t ix, iy, iz;
-    ix.assign(static_cast<double>(p.position.x) / quantizationFactor);
-    iy.assign(static_cast<double>(p.position.y) / quantizationFactor);
-    iz.assign(static_cast<double>(p.position.z) / quantizationFactor);
+    ix.assign(p.position.x / quantizationFactor);
+    iy.assign(p.position.y / quantizationFactor);
+    iz.assign(p.position.z / quantizationFactor);
 
     // Converts a signed value to an unsigned value.
     const bmp::uint256_t bias = 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff_cppui256;
@@ -208,106 +147,85 @@ AABB CreateInitializerBox()
     return aabb;
 }
 
-BatchedPointCloud LoadScene(std::string_view scene)
+std::vector<MortonPoint> LoadScene(std::string_view scene)
 {
-    auto points = LoadScenePoints(scene);
+    const auto model = LoadModel(scene);
 
-    // Get smallest distance between points.
-    float smallestDistance = 1.0f;
-    for (std::uint64_t i = 0; i < points.size() - 1; ++i) {
-        smallestDistance = glm::min(smallestDistance, glm::distance(points[i].position, points[i + 1].position));
-    }
-    smallestDistance *= 10.0f;
-
-    for (auto& point : points) {
-        point.mortonCode = MortonIndex768(point, smallestDistance);
-    }
-    std::sort(std::execution::par_unseq, points.begin(), points.end());
-
-    auto batch = Batch(0U, 0ULL, std::span(points), CreateInitializerBox());
-    BatchedPointCloud batched{std::move(points), std::move(batch.Subdivide())};
-    return batched;
-}
-
-bool Point::operator<(const Point& q) const { return mortonCode < q.mortonCode; }
-
-Batch::Batch(const std::uint32_t iteration, const bmp::uint1024_t mortonCode, const std::span<Point> inPoints,
-             const AABB box, const bool isLeaf)
-{
-    // we only support tree depth up to 256
-    if (iteration > 256) {
-        throw std::runtime_error("Tree exceded maximum supported depth");
-    }
-
-    aabb = box;
-    points = inPoints;
-
-    id.leaf = isLeaf;
-    id.iteration = iteration;
-    id.mortonCode = mortonCode;
-}
-
-std::vector<Batch> Batch::Subdivide() const
-{
-    std::vector<Batch> result;
-
-    if (points.size() < MaxBatchSize) {
-        result.emplace_back(id.iteration, id.mortonCode, points, aabb, true);
-    } else {
-        std::vector<Batch> children;
-
-        std::uint32_t count = 0;
-        std::uint32_t offset = 0;
-        AABB box = CreateInitializerBox();
-        auto prevPointNodeID = MortonToNodeID(points.begin()->mortonCode);
-
-        // splitting points into octree nodes
-        // points_ is already sorted by morton code so points related to the same node are in a contiguous range.
-        // Just find the range and set the span
-        for (auto& point : points) {
-            const auto currPointNodeID = MortonToNodeID(point.mortonCode);
-
-            // if NodeID changed
-            if (prevPointNodeID != currPointNodeID) {
-                children.emplace_back(id.iteration + 1, NodeIDToMorton(prevPointNodeID), points.subspan(offset, count),
-                                      box);
-
-                offset += count;
-                count = 0;
-                box = CreateInitializerBox();
-                prevPointNodeID = currPointNodeID;
+    std::unordered_set<Point> points;
+    std::vector<Point> pointBuffer;
+    for (const auto& mesh : model.meshes) {
+        for (const auto& primitive : mesh.primitives) {
+            if (primitive.attributes.empty()) {
+                continue;
             }
-            ++count;
 
-            box.minV = glm::min(box.minV, point.position);
-            box.maxV = glm::max(box.maxV, point.position);
-        }
-        // check if last node has elements and add it
-        if (count != 0) {
-            children.emplace_back(id.iteration + 1, NodeIDToMorton(prevPointNodeID), points.subspan(offset, count),
-                                  box);
-        }
+            auto modelMatrix = glm::mat4(1.0);
+            if (!model.nodes.empty()) {
+                const auto& matrix = model.nodes[0].matrix;
+                modelMatrix = glm::mat4(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5], matrix[6],
+                                        matrix[7], matrix[8], matrix[9], matrix[10], matrix[11], matrix[12], matrix[13],
+                                        matrix[14], matrix[15]);
+            }
 
-        // combine subdivide results
-        for (auto& child : children) {
-            const auto res = child.Subdivide();
-            result.insert(result.end(), res.begin(), res.end());
+            pointBuffer.resize(model.accessors[primitive.attributes.begin()->second].count);
+
+            for (const auto& [accessorName, accessorID] : primitive.attributes) {
+                const auto& accessor = model.accessors[accessorID];
+
+                const auto& bufferViewID = accessor.bufferView;
+                const auto& bufferView = model.bufferViews[bufferViewID];
+
+                const auto& bufferID = bufferView.buffer;
+                const auto& buffer = model.buffers[bufferID].data;
+
+                const auto& primPointCount = accessor.count;
+                const auto bufferOffset = accessor.byteOffset + bufferView.byteOffset;
+                const auto stride = accessor.ByteStride(bufferView);
+
+                if (accessorName == "POSITION") {
+                    for (std::uint32_t i = 0; i < primPointCount; ++i) {
+                        memcpy(&pointBuffer[i].position, &buffer[bufferOffset + i * stride], stride);
+                        pointBuffer[i].position = modelMatrix * glm::vec4(pointBuffer[i].position, 1);
+                    }
+                } else if (accessorName.substr(0, 5) == "COLOR") {
+                    for (std::uint32_t i = 0; i < primPointCount; ++i) {
+                        glm::vec4 fColor;
+                        memcpy(&fColor, &buffer[bufferOffset + i * stride], stride);
+
+                        pointBuffer[i].color.r = static_cast<std::uint8_t>(fColor.r * 255);
+                        pointBuffer[i].color.g = static_cast<std::uint8_t>(fColor.g * 255);
+                        pointBuffer[i].color.b = static_cast<std::uint8_t>(fColor.b * 255);
+                        pointBuffer[i].color.a = 255;
+                    }
+                }
+            }
+
+            points.insert(pointBuffer.begin(), pointBuffer.end());
+            pointBuffer.clear();
         }
     }
 
-    return result;
+    float minDistance = std::numeric_limits<float>::max();
+    std::optional<glm::vec3> lastPos;
+    for (const auto& point : points) {
+        if (lastPos.has_value()) {
+            minDistance = std::min(minDistance, glm::distance(point.position, lastPos.value()));
+        }
+        lastPos = point.position;
+    }
+    // Apply safety factor
+    double scale = 10.0 / minDistance;
+
+    std::vector<MortonPoint> mortonPoints(points.begin(), points.end());
+
+    std::for_each(std::execution::par_unseq, mortonPoints.begin(), mortonPoints.end(),
+                  [&scale](MortonPoint& p) { p.mortonCode = MortonIndex768(p.point, scale); });
+
+    std::sort(std::execution::par_unseq, mortonPoints.begin(), mortonPoints.end());
+
+    return mortonPoints;
 }
 
-std::uint32_t Batch::MortonToNodeID(const bmp::uint1024_t mortonCode) const
-{
-    // NodeID is a three bit number taken of the morton code according to node level in the tree.
-    // iteration(Node Level) 0 means the root Node. MortonCode used is a 768 bit mortoncode. Mask with 0b0111.
-    return ((mortonCode >> (765U - id.iteration * 3U)) & 0x7U).convert_to<uint32_t>();
-}
+bool Point::operator==(const Point& q) const { return position == q.position; }
 
-bmp::uint1024_t Batch::NodeIDToMorton(const std::uint32_t nodeID) const
-{
-    // MortonCode limit used by the tree is 768 bits.
-    // To get the Morton Code: shift the nodeID to correct iteartion bits and combine with parents Morton code.
-    return (static_cast<bmp::uint1024_t>(nodeID) << (765U - id.iteration * 3U)) | id.mortonCode;
-}
+bool MortonPoint::operator<(const MortonPoint& q) const { return mortonCode < mortonCode; }
