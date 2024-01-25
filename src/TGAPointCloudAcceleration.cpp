@@ -8,7 +8,7 @@ namespace
 {
 struct Batch {
     AABB aabb;
-    std::span<const MortonPoint> points;
+    std::span<const Point> points;
 };
 
 struct BatchesCompressed {
@@ -33,7 +33,7 @@ BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch>& batches)
     for (const auto& batch : batches) {
         for (const auto& mortonPoint : batch.points) {
             // Compress position and split into multiple buffers
-            const glm::vec3& floatPos = mortonPoint.point.position;
+            const glm::vec3& floatPos = mortonPoint.position;
             const glm::vec3 aabbSize = batch.aabb.maxV - batch.aabb.minV;
 
             // convert float position to 30-bit fixed precision relative to BB
@@ -55,7 +55,7 @@ BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch>& batches)
                                         0);  // take lowest 10 bit as high precision
 
             // Pass on colors
-            colors.emplace_back(mortonPoint.point.color);
+            colors.emplace_back(mortonPoint.color);
         }
     }
 
@@ -80,8 +80,8 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
         auto& box = batch.aabb;
         box = CreateInitializerBox();
         for (const auto& mortonPoint : batch.points) {
-            box.minV = glm::min(mortonPoint.point.position, box.minV);
-            box.maxV = glm::max(mortonPoint.point.position, box.maxV);
+            box.minV = glm::min(mortonPoint.position, box.minV);
+            box.maxV = glm::max(mortonPoint.position, box.maxV);
         }
     }
 

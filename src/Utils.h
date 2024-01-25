@@ -1,11 +1,8 @@
 #pragma once
 
-#include <boost/multiprecision/cpp_int.hpp>
 #include <glm/glm.hpp>
 #include <string_view>
 #include <vector>
-
-namespace bmp = boost::multiprecision;
 
 constexpr auto MaxBatchSize = 8192;
 
@@ -26,26 +23,9 @@ struct CompressedColor {
 struct Point {
     glm::vec3 position;
     CompressedColor color;
+    std::uint64_t mortonCode;
 
-    bool operator==(const Point& q) const;
-};
-
-namespace std
-{
-template <>
-struct hash<Point> {
-    std::size_t operator()(const Point& p) const
-    {
-        return std::hash<float>{}(p.position.x) ^ std::hash<float>{}(p.position.y) ^ std::hash<float>{}(p.position.z);
-    }
-};
-}  // namespace std
-
-struct MortonPoint {
-    Point point;
-    bmp::uint1024_t mortonCode;
-
-    bool operator<(const MortonPoint& q) const;
+    bool operator<(const Point& q) const;
 };
 
 struct AABB {
@@ -53,6 +33,6 @@ struct AABB {
     alignas(16) glm::vec3 maxV;
 };
 
-std::vector<MortonPoint> LoadScene(std::string_view scene);
+std::vector<Point> LoadScene(std::string_view scene);
 
 AABB CreateInitializerBox();
