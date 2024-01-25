@@ -40,15 +40,6 @@ layout(set = 1, binding = 1) buffer BatchList{
 
 layout(local_size_x = 1024) in;
 
-// Taken from https://www.shadertoy.com/view/ssyyDh
-float cbrt(const float x)
-{
-    float y = uintBitsToFloat(709973695u+floatBitsToUint(x)/3u);
-    y = y*(2.0/3.0) + (1.0/3.0)*x/(y*y);
-    y = y*(2.0/3.0) + (1.0/3.0)*x/(y*y);
-    return y;
-}
-
 void main(){
     const uint id = gl_GlobalInvocationID.x;
     if (id >= totalBatchCount){
@@ -69,38 +60,30 @@ void main(){
         vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.maxZ)  // 7 - maximum
     );
     
+    // Project batch bounding box and check for extent on screen and visibility
     bool isVisible = false;
+    uvec2 screenMin = camera.resolution;
+    uvec2 screenMax = uvec2(0);
     for (uint i = 0; i < 8; ++i) {
         vec4 corner = camera.projection * camera.view * vec4(aabbCorners[i], 1);
+        const vec2 divided = (corner / abs(corner.w)).xy;
+        const vec2 pixelSpace = ((divided + 1) / 2) * camera.resolution;
+
+        screenMin = ivec2(min(screenMin, pixelSpace));
+        screenMax = ivec2(max(screenMax, pixelSpace));
+
         if((-corner.w <= corner.x) && (corner.x <= corner.w) &&
             (-corner.w <= corner.y) && (corner.y <= corner.w) &&
             (0.f <= corner.z) && (corner.z <= corner.w)){
             isVisible = true;
         }
     }
+
+    const uint pixelExtend = max(screenMax.x - screenMin.x, screenMax.y - screenMin.y);
     
-    // Frustum culling
-    if (isVisible){
-        // Find aabb extend on screen
-        uvec2 screenMin = camera.resolution;
-        uvec2 screenMax = uvec2(0);
-
-        for(uint i = 0; i < 8; ++i){
-            // Transform aabb & perspective divide
-            const vec4 divReady = camera.projection * camera.view * vec4(aabbCorners[i], 1);
-            const vec2 divided = (divReady / abs(divReady.w)).xy;
-            const vec2 pixelSpace = ((divided + 1) / 2) * camera.resolution;
-
-            screenMin = ivec2(min(screenMin.x, pixelSpace.x), min(screenMin.y, pixelSpace.y));
-            screenMax = ivec2(max(screenMax.x, pixelSpace.x), max(screenMax.y, pixelSpace.y));
-        }
-
-        const uint pixelExtend = max(screenMax.x - screenMin.x, screenMax.y - screenMin.y);
-
-        // LOD selection
-        if (pixelExtend > lodExtend){
-            const uint currentBatchCount = atomicAdd(batchCount, 1);
-            batchList[currentBatchCount] = id;
-        }
+    // Frustum culling + LOD selection
+    if (isVisible && (pixelExtend > lodExtend)){
+        const uint currentBatchCount = atomicAdd(batchCount, 1);
+        batchList[currentBatchCount] = id;
     }
 }
