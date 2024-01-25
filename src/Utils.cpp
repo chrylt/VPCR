@@ -6,7 +6,6 @@
 #include <execution>
 #include <iostream>
 #include <optional>
-#include <unordered_set>
 
 namespace
 {
