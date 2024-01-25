@@ -112,8 +112,8 @@ std::uint64_t MortonIndex64(const Point& p, const double scale)
     const std::int64_t iy = static_cast<int64_t>(p.position.y * scale);
     const std::int64_t iz = static_cast<int64_t>(p.position.z * scale);
 
-    assert((ix < (1 << 21)) && (ix > -(1 << 21)) && (iy < (1 << 21)) && (iy > -(1 << 21)) && (iz < (1 << 21)) &&
-           (iz > -(1 << 21)));
+    assert((ix < (1 << 20)) && (ix > -(1 << 20)) && (iy < (1 << 20)) && (iy > -(1 << 20)) && (iz < (1 << 20)) &&
+           (iz > -(1 << 20)));
 
     // Mask out lowest 21 bits, flip highest bit if negative
     std::uint64_t xx = (ix & (0b111111111111111111111)) ^ (ix < 0 ? 0b100000000000000000000 : 0);

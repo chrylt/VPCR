@@ -128,6 +128,8 @@ vec3 getAdaptivePointPosition(const vec3 batchBoxSize, const vec3 batchBoxMin, c
 }
 
 void main(){
+    drawnBatches = batchCount;
+
     const uint id = gl_GlobalInvocationID.x / gl_WorkGroupSize.x;
     if (id >= batchCount){
         return;
@@ -163,6 +165,4 @@ void main(){
             }
         }
     }
-
-    drawnBatches = batchCount;
 }

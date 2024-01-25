@@ -26,6 +26,7 @@ layout(set = 0, binding = 0) uniform Camera{
 
 layout(set = 0, binding = 1) uniform DynamicConst{
     uint totalBatchCount;
+    float lodExtend;
 };
 
 layout(set = 1, binding = 0) readonly buffer BatchNodes{
@@ -49,7 +50,6 @@ float cbrt(const float x)
 }
 
 void main(){
-    // TODO: @Atzubi
     const uint id = gl_GlobalInvocationID.x;
     if (id >= totalBatchCount){
         return;
@@ -81,10 +81,24 @@ void main(){
     
     // Frustum culling
     if (isVisible){
-        const float distance = cbrt(length(camera.position - (aabbCorners[0] + (aabbCorners[7] - aabbCorners[0])/2.f)));
-        const float boxSize = length(aabbCorners[7] - aabbCorners[0]) * 1.5f; // TODO: figure out the correct factor
+        // Find aabb extend on screen
+        uvec2 screenMin = camera.resolution;
+        uvec2 screenMax = uvec2(0);
+
+        for(uint i = 0; i < 8; ++i){
+            // Transform aabb & perspective divide
+            const vec4 divReady = camera.projection * camera.view * vec4(aabbCorners[i], 1);
+            const vec2 divided = (divReady / abs(divReady.w)).xy;
+            const vec2 pixelSpace = ((divided + 1) / 2) * camera.resolution;
+
+            screenMin = ivec2(min(screenMin.x, pixelSpace.x), min(screenMin.y, pixelSpace.y));
+            screenMax = ivec2(max(screenMax.x, pixelSpace.x), max(screenMax.y, pixelSpace.y));
+        }
+
+        const uint pixelExtend = max(screenMax.x - screenMin.x, screenMax.y - screenMin.y);
+
         // LOD selection
-        if (boxSize > distance){
+        if (pixelExtend > lodExtend){
             const uint currentBatchCount = atomicAdd(batchCount, 1);
             batchList[currentBatchCount] = id;
         }
