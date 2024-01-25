@@ -4,3 +4,9 @@
 [submodule "external/TGLTF/tinygltf"]
 	path = external/TGLTF/tinygltf
 	url = https://github.com/syoyo/tinygltf
+[submodule "external/BMP/multiprecision"]
+	path = external/BMP/multiprecision
+	url = https://github.com/boostorg/multiprecision
+[submodule "external/BMP/config"]
+	path = external/BMP/config
+	url = https://github.com/boostorg/config
