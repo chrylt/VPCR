@@ -45,7 +45,7 @@ std::uint64_t CreateMortonWithDepth(std::uint64_t code, const std::uint8_t depth
 
 class MortonTree {
 public:
-    MortonTree(std::vector<Point> points)
+    MortonTree(std::vector<Point> points) : pointCount_(static_cast<std::uint32_t>(points.size()))
     {
         // We want to insert points in random order to generate a LOD tree where each level is a subset of points from
         // the lower levels. We start by inserting points in the highest level, once that has MaxBatchSize many points,
@@ -66,10 +66,12 @@ public:
     FlatLODTree GetLODTree() const
     {
         FlatLODTree tree;
+        tree.points.reserve(pointCount_);
+        tree.batchNodes.reserve(batches_.size());
 
         std::uint32_t offset = 0;
         for (const auto& [code, batch] : batches_) {
-            Node node;
+            auto& node = tree.batchNodes.emplace_back();
             node.box = CreateInitializerBox();
 
             for (const auto& point : batch) {
@@ -82,8 +84,6 @@ public:
             node.pointOffset = offset;
             node.pointCount = static_cast<std::uint32_t>(batch.size());
             node.depth = GetDepth(code);
-
-            tree.batchNodes.emplace_back(std::move(node));
 
             offset += node.pointCount;
         }
@@ -104,6 +104,7 @@ private:
         return true;
     }
 
+    std::uint32_t pointCount_;
     std::unordered_map<std::uint64_t, std::vector<Point>> batches_;
 };
 
@@ -164,8 +165,7 @@ BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Node>& batches, c
 TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const std::string_view scenePath)
     : backend_(tgai)
 {
-    MortonTree tree(LoadScene(scenePath));
-    const auto [points, batchNodes] = tree.GetLODTree();
+    const auto [points, batchNodes] = MortonTree(LoadScene(scenePath)).GetLODTree();
 
     batchCount_ = static_cast<std::uint32_t>(batchNodes.size());
 
