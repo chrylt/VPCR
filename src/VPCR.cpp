@@ -28,7 +28,7 @@ private:
     struct Pipeline {
         tga::Buffer batchList;
         tga::Buffer renderTarget;
-        tga::Texture depthBuffer;
+        tga::Buffer depthBuffer;
         std::unique_ptr<TGAComputePass> clearPass;
         std::unique_ptr<TGAComputePass> lodPass;
         std::unique_ptr<TGAComputePass> depthPass;
@@ -40,6 +40,7 @@ private:
     struct DynamicConst {
         // Misc information we need on gpu
         std::uint32_t totalBatchCount;
+        std::uint32_t depthDiscSteps;
     };
 
     void OnUpdate(std::uint32_t frameIndex);
@@ -213,8 +214,6 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
     lodPass->Execute(commandRecorder, batchCount);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
     depthPass->Execute(commandRecorder, batchCount);
-    commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
-    colorPass->Execute(commandRecorder, batchCount);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::FragmentShader);
     displayPass->Execute(commandRecorder, frameIndex);
 
@@ -230,7 +229,7 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
 
 void VPCRImpl::CreateDynamicConst()
 {
-    DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount()};
+    DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(), 1000};
 
     tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);
@@ -276,8 +275,10 @@ void VPCRImpl::CreateDepthBuffer()
 {
     const auto res = config_.Get<std::vector<std::uint32_t>>("resolution").value();
     for (auto& pipeline : pipelines_) {
-        const tga::TextureInfo textureInfo(res[0], res[1], tga::Format::r32_uint);
-        pipeline.depthBuffer = backend_.createTexture(textureInfo);
+        const glm::vec2 resolution = camera_->GetResolution();
+        const tga::BufferInfo info{tga::BufferUsage::storage,
+                                   static_cast<size_t>(resolution.x * resolution.y) * sizeof(Histogram)};
+        pipeline.depthBuffer = backend_.createBuffer(info);
     }
 }
 

@@ -14,6 +14,18 @@ struct Batch {
     uint pointCount;
 };
 
-uint getPixelID(uvec2 resolution, uvec2 pixelCoord){
+struct Bucket{
+    uint bucketID;
+    int nextIdx;
+    uint64_t acc;
+};
+
+struct Histogram{
+    int startIdx;
+    uint bucketCount;
+    Bucket buckets[100];   // maximal 100 filled buckets per pixel
+};
+
+uint getPixelID(const uvec2 resolution, const uvec2 pixelCoord){
     return pixelCoord.x * resolution.x + pixelCoord.y;
 }

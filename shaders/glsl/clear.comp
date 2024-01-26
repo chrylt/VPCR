@@ -19,7 +19,9 @@ layout(set = 1, binding = 0) buffer RENDER_TARGET{
     uint64_t renderTarget[];
 };
 
-layout(set = 1, binding = 1, r32ui) uniform uimage2D depthBuffer;
+layout(set = 1, binding = 1) buffer DEPTH_BUFFER{ 
+    Histogram depthBuffer[];
+};
 
 layout(local_size_x = 1024) in;
 
@@ -29,7 +31,8 @@ void main()
     if (id.x >= camera.resolution.x || id.y >= camera.resolution.y){
         return;
     }
-
-    renderTarget[getPixelID(camera.resolution, id)] = uint64_t(0);
-    imageStore(depthBuffer, id, uvec4(0xFFFFFFFF)); // depth-test assumes maximum depth in empty depth-buffer for atomic-min-operation
+    const uint pixelIdx = getPixelID(camera.resolution, id);
+    renderTarget[pixelIdx] = uint64_t(0);
+    depthBuffer[pixelIdx].startIdx = -1;
+    depthBuffer[pixelIdx].bucketCount = 0;
 }
