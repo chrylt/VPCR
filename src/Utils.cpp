@@ -112,8 +112,12 @@ std::uint64_t MortonIndex64(const Point& p, const double scale)
     const std::int64_t iy = static_cast<int64_t>(p.position.y * scale);
     const std::int64_t iz = static_cast<int64_t>(p.position.z * scale);
 
-    assert((ix < (1 << 20)) && (ix > -(1 << 20)) && (iy < (1 << 20)) && (iy > -(1 << 20)) && (iz < (1 << 20)) &&
-           (iz > -(1 << 20)));
+    // Test whether the scene, after scaling is too large to represent with a 63 bit morton code
+    // The code may not break regardless but we should make sure that our scenes we want to present fit
+    if (((ix >= (1 << 20)) || (ix < -(1 << 20)) || (iy >= (1 << 20)) || (iy < -(1 << 20)) || (iz >= (1 << 20)) ||
+         (iz < -(1 << 20)))) {
+        throw std::runtime_error("The scene is too large and can not be represented by a 63 bit morton code!");
+    }
 
     // Mask out lowest 21 bits, flip highest bit if negative
     std::uint64_t xx = (ix & (0b111111111111111111111)) ^ (ix < 0 ? 0b100000000000000000000 : 0);
@@ -147,12 +151,10 @@ std::uint64_t MortonIndex64(const Point& p, const double scale)
 
 AABB CreateInitializerBox()
 {
-    AABB aabb = {{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-                  std::numeric_limits<float>::infinity()},
-                 {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-                  -std::numeric_limits<float>::infinity()}};
-
-    return aabb;
+    return {{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
+             std::numeric_limits<float>::infinity()},
+            {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+             -std::numeric_limits<float>::infinity()}};
 }
 
 std::vector<Point> LoadScene(const std::string_view scene)
@@ -161,15 +163,14 @@ std::vector<Point> LoadScene(const std::string_view scene)
 
     float minDistance = std::numeric_limits<float>::max();
     std::optional<glm::vec3> lastPos;
-    for (const auto& point : points) {
+    for (const auto& [position, _, __] : points) {
         if (lastPos.has_value()) {
-            const auto dist = glm::distance(point.position, lastPos.value());
             // Ignore points with the same position
-            if (dist != 0) {
-                minDistance = std::min(minDistance, glm::distance(point.position, lastPos.value()));
+            if (const auto dist = glm::distance(position, lastPos.value()); dist != 0) {
+                minDistance = std::min(minDistance, glm::distance(position, lastPos.value()));
             }
         }
-        lastPos = point.position;
+        lastPos = position;
     }
     // Apply safety factor
     const double scale = 1.2 / minDistance;
