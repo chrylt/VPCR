@@ -28,20 +28,12 @@ layout(location = 0) out vec4 color;
 
 void main()
 {
-    const uint64_t storedValue = renderTarget[getPixelID(camera.resolution, uvec2(gl_FragCoord.xy))];
-    float counter = float(storedValue & 0xFFFF);
-    float r = float((storedValue >> 48) & 0xFFFF) / counter;
-    float g = float((storedValue >> 32) & 0xFFFF) / counter;
-    float b = float((storedValue >> 16) & 0xFFFF) / counter;
-    color = vec4(vec3(r, g, b) / 255, 1);
-
-    if(counter >= 255)
-    {
-        // overflow detected
-        color = vec4(1, 0, 0, 1);
-    }
-
     uint pixelID = getPixelID(camera.resolution, uvec2(gl_FragCoord.xy));
+
+    float counter = 0;
+    float r = 0;
+    float g = 0;
+    float b = 0;
 
     int prevIdx = -1;
     int currIdx = depthBuffer[pixelID].startIdx;
@@ -49,15 +41,23 @@ void main()
     bool foundMax = false;
     while(!foundMax && currIdx != -1){
 
-        // add contribution
+        // unpack bucket values
         const uint64_t storedValue = renderTarget[pixelID];
-        float counter = float(storedValue & 0xFFFF);
-        float r = float((storedValue >> 48) & 0xFFFF) / counter;
-        float g = float((storedValue >> 32) & 0xFFFF) / counter;
-        float b = float((storedValue >> 16) & 0xFFFF) / counter;
+        float bucketCounter = float(storedValue & 0xFFFF);
+        float bucketR = float((storedValue >> 48) & 0xFFFF) / counter;
+        float bucketG = float((storedValue >> 32) & 0xFFFF) / counter;
+        float bucketB = float((storedValue >> 16) & 0xFFFF) / counter;
 
-        // TODO: check for possible overflow
-        // TODO: accumulate the thingies
+        if(counter + bucketCounter >= 255){
+            // potential overflow detected; stop iteration
+            foundMax = true;
+        }else{
+            // add contribution
+            counter += bucketCounter;
+            r += bucketR;
+            g += bucketG;
+            b += bucketB;
+        }
 
         // end of loop operations
         prevIdx = currIdx;
@@ -68,4 +68,5 @@ void main()
         }
     }
 
+    color = vec4(vec3(r, g, b) / counter, 1);
 }
