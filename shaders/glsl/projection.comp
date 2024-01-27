@@ -8,14 +8,19 @@ struct Point{
 };
 
 struct AABB{
-    vec3 minV;
-    vec3 maxV;
+    float minX;
+    float minY;
+    float minZ;
+    float maxX;
+    float maxY;
+    float maxZ;
 };
 
-struct Batch{
+struct Node{
     AABB box;
+    uint childrenPointer;
     uint pointOffset;
-    uint pointCount;
+    uint maskDepthCount;  // higher 19 bits are the count, lower 8 the child mask, middle 5 the tree depth
 };
 
 layout(set = 0, binding = 0) uniform Camera{
@@ -49,8 +54,8 @@ layout(set = 2, binding = 3) buffer Points_Color{
     uint pointsRgba[];
 };
 
-layout(set = 3, binding = 0) readonly buffer Batches{
-    Batch batches[];  
+layout(set = 3, binding = 0) readonly buffer BatchNodes{
+    Node nodes[];  
 };
 
 layout(set = 3, binding = 1) readonly buffer BatchList{
@@ -58,20 +63,24 @@ layout(set = 3, binding = 1) readonly buffer BatchList{
     uint batchList[];
 };
 
+layout(set = 4, binding = 0) writeonly buffer Statistics{
+    uint drawnBatches;
+};
+
 layout(local_size_x = 1024) in;
 
-uint getBatchPixelExtend(const Batch currBatch){
+uint getBatchPixelExtend(const Node currBatch){
     // determine precision by projecting batch aabb to screen
     /// create aabb corner points
     const vec3[8] aabbCorners = vec3[](
-        currBatch.box.minV, // 0 - minimum
-        vec3(currBatch.box.minV.x, currBatch.box.minV.y, currBatch.box.maxV.z), // 0 0 1 -> 1
-        vec3(currBatch.box.minV.x, currBatch.box.maxV.y, currBatch.box.minV.z), // 0 1 0 -> 2
-        vec3(currBatch.box.minV.x, currBatch.box.maxV.y, currBatch.box.maxV.z), // 0 1 1 -> 3
-        vec3(currBatch.box.maxV.x, currBatch.box.minV.y, currBatch.box.minV.z), // 1 0 0 -> 4
-        vec3(currBatch.box.maxV.x, currBatch.box.minV.y, currBatch.box.maxV.z), // 1 0 1 -> 5
-        vec3(currBatch.box.maxV.x, currBatch.box.maxV.y, currBatch.box.minV.z), // 1 1 0 -> 6
-        currBatch.box.maxV  // 7 - maximum
+        vec3(currBatch.box.minX, currBatch.box.minY, currBatch.box.minZ), // 0 - minimum
+        vec3(currBatch.box.minX, currBatch.box.minY, currBatch.box.maxZ), // 0 0 1 -> 1
+        vec3(currBatch.box.minX, currBatch.box.maxY, currBatch.box.minZ), // 0 1 0 -> 2
+        vec3(currBatch.box.minX, currBatch.box.maxY, currBatch.box.maxZ), // 0 1 1 -> 3
+        vec3(currBatch.box.maxX, currBatch.box.minY, currBatch.box.minZ), // 1 0 0 -> 4
+        vec3(currBatch.box.maxX, currBatch.box.minY, currBatch.box.maxZ), // 1 0 1 -> 5
+        vec3(currBatch.box.maxX, currBatch.box.maxY, currBatch.box.minZ), // 1 1 0 -> 6
+        vec3(currBatch.box.maxX, currBatch.box.maxY, currBatch.box.maxZ)  // 7 - maximum
     );
 
     /// find aabb extend on screen
@@ -119,23 +128,26 @@ vec3 getAdaptivePointPosition(const vec3 batchBoxSize, const vec3 batchBoxMin, c
 }
 
 void main(){
+    drawnBatches = batchCount;
+
     const uint id = gl_GlobalInvocationID.x / gl_WorkGroupSize.x;
     if (id >= batchCount){
         return;
     }
 
-    const Batch batch = batches[batchList[id]];
-    const vec3 batchBBSize = batch.box.maxV - batch.box.minV;
+    const Node batch = nodes[batchList[id]];
+    const vec3 batchBBSize = vec3(batch.box.maxX, batch.box.maxY, batch.box.maxZ) - vec3(batch.box.minX, batch.box.minY, batch.box.minZ);
     const uint batchPixelExtend = getBatchPixelExtend(batch);
     const uint localId = gl_LocalInvocationID.x;
-    const uint workAmount = (batch.pointCount / gl_WorkGroupSize.x) + 1;
+    const uint pointCount = batch.maskDepthCount >> 13;
+    const uint workAmount = (pointCount / gl_WorkGroupSize.x) + 1;
 
     for (uint k = batch.pointOffset + localId * workAmount; k < batch.pointOffset + (localId + 1) * workAmount; ++k){
-        if ((k - batch.pointOffset) >= batch.pointCount){
+        if ((k - batch.pointOffset) >= pointCount){
             break;
         }
 
-        const vec4 projected = camera.projection * camera.view * vec4(getAdaptivePointPosition(batchBBSize, batch.box.minV, batchPixelExtend, k), 1);
+        const vec4 projected = camera.projection * camera.view * vec4(getAdaptivePointPosition(batchBBSize, vec3(batch.box.minX, batch.box.minY, batch.box.minZ), batchPixelExtend, k), 1);
 
         if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
                 (-projected.w <= projected.y) && (projected.y <= projected.w) &&

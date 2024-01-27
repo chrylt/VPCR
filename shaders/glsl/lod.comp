@@ -1,18 +1,19 @@
 #version 460
 
-struct Node{
-    uint something;
-};
-
 struct AABB{
-    vec3 minV;
-    vec3 maxV;
+    float minX;
+    float minY;
+    float minZ;
+    float maxX;
+    float maxY;
+    float maxZ;
 };
 
-struct Batch{
+struct Node{
     AABB box;
+    uint childrenPointer;
     uint pointOffset;
-    uint pointCount;
+    uint maskDepthCount;  // higher 19 bits are the count, lower 8 the child mask, middle 5 the tree depth
 };
 
 layout(set = 0, binding = 0) uniform Camera{
@@ -25,17 +26,14 @@ layout(set = 0, binding = 0) uniform Camera{
 
 layout(set = 0, binding = 1) uniform DynamicConst{
     uint totalBatchCount;
+    float lodExtend;
 };
 
-layout(set = 1, binding = 0) readonly buffer AccelerationStructure{
-    Node nodes[];
-}accelerationStructure;
-
-layout(set = 2, binding = 0) readonly buffer Batches{
-    Batch batches[];  
+layout(set = 1, binding = 0) readonly buffer BatchNodes{
+    Node nodes[];  
 };
 
-layout(set = 2, binding = 1) readonly buffer BatchList{
+layout(set = 1, binding = 1) buffer BatchList{
     uint batchCount;
     uint batchList[];
 };
@@ -43,5 +41,49 @@ layout(set = 2, binding = 1) readonly buffer BatchList{
 layout(local_size_x = 1024) in;
 
 void main(){
-    // TODO: @Atzubi
+    const uint id = gl_GlobalInvocationID.x;
+    if (id >= totalBatchCount){
+        return;
+    }
+    
+    // TODO: traverse tree instead of processing all nodes
+    const Node batchNode = nodes[id];
+    
+    const vec3[8] aabbCorners = vec3[](
+        vec3(batchNode.box.minX, batchNode.box.minY, batchNode.box.minZ), // 0 - minimum
+        vec3(batchNode.box.minX, batchNode.box.minY, batchNode.box.maxZ), // 0 0 1 -> 1
+        vec3(batchNode.box.minX, batchNode.box.maxY, batchNode.box.minZ), // 0 1 0 -> 2
+        vec3(batchNode.box.minX, batchNode.box.maxY, batchNode.box.maxZ), // 0 1 1 -> 3
+        vec3(batchNode.box.maxX, batchNode.box.minY, batchNode.box.minZ), // 1 0 0 -> 4
+        vec3(batchNode.box.maxX, batchNode.box.minY, batchNode.box.maxZ), // 1 0 1 -> 5
+        vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.minZ), // 1 1 0 -> 6
+        vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.maxZ)  // 7 - maximum
+    );
+    
+    // Project batch bounding box and check for extent on screen and visibility
+    bool isVisible = false;
+    uvec2 screenMin = camera.resolution;
+    uvec2 screenMax = uvec2(0);
+    for (uint i = 0; i < 8; ++i) {
+        vec4 corner = camera.projection * camera.view * vec4(aabbCorners[i], 1);
+        const vec2 divided = (corner / abs(corner.w)).xy;
+        const vec2 pixelSpace = ((divided + 1) / 2) * camera.resolution;
+
+        screenMin = ivec2(min(screenMin, pixelSpace));
+        screenMax = ivec2(max(screenMax, pixelSpace));
+
+        if((-corner.w <= corner.x) && (corner.x <= corner.w) &&
+            (-corner.w <= corner.y) && (corner.y <= corner.w) &&
+            (0.f <= corner.z) && (corner.z <= corner.w)){
+            isVisible = true;
+        }
+    }
+
+    const uint pixelExtend = max(screenMax.x - screenMin.x, screenMax.y - screenMin.y);
+    
+    // Frustum culling + LOD selection
+    if (isVisible && (pixelExtend > lodExtend)){
+        const uint currentBatchCount = atomicAdd(batchCount, 1);
+        batchList[currentBatchCount] = id;
+    }
 }

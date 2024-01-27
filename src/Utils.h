@@ -29,8 +29,8 @@ struct Point {
 };
 
 struct AABB {
-    alignas(16) glm::vec3 minV;
-    alignas(16) glm::vec3 maxV;
+    glm::vec3 minV;
+    glm::vec3 maxV;
 };
 
 std::vector<Point> LoadScene(std::string_view scene);
