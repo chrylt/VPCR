@@ -1,9 +1,16 @@
 #include "TGAPointCloudAcceleration.h"
 
+#include <span>
+
 #include "Utils.h"
 
 namespace
 {
+struct Batch {
+    AABB aabb;
+    std::span<const Point> points;
+};
+
 struct BatchesCompressed {
     std::vector<CompressedPosition> lowPrecisions;
     std::vector<CompressedPosition> mediumPrecisions;
@@ -24,7 +31,7 @@ BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Batch>& batches)
     colors.reserve(batches.size() * MaxBatchSize);
 
     for (const auto& batch : batches) {
-        for (const auto& [position, color] : batch.points) {
+        for (const auto& [position, color, _] : batch.points) {
             // Compress position and split into multiple buffers
             const glm::vec3& floatPos = position;
             const glm::vec3 aabbSize = batch.aabb.maxV - batch.aabb.minV;
@@ -61,8 +68,23 @@ TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const
 {
     // TODO: @Atzubi
 
-    auto batchedPointCloud = LoadScene(scenePath);
-    const auto& batches = batchedPointCloud.batches;
+    const auto mortonPoints = LoadScene(scenePath);
+    std::vector<Batch> batches;
+    for (std::size_t i = 0; i < mortonPoints.size(); i += MaxBatchSize) {
+        batches.push_back(Batch{{},
+                                std::span(mortonPoints.begin() + i,
+                                          mortonPoints.begin() + std::min(i + MaxBatchSize, mortonPoints.size()))});
+    }
+
+    for (auto& batch : batches) {
+        auto& box = batch.aabb;
+        box = CreateInitializerBox();
+        for (const auto& mortonPoint : batch.points) {
+            box.minV = glm::min(mortonPoint.position, box.minV);
+            box.maxV = glm::max(mortonPoint.position, box.maxV);
+        }
+    }
+
     batchCount_ = static_cast<std::uint32_t>(batches.size());
 
     // Create buffers for points

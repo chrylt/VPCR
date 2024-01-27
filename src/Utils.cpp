@@ -3,12 +3,14 @@
 #define TINYGLTF_IMPLEMENTATION
 #include <tinygltf/tiny_gltf.h>
 
+#include <execution>
 #include <iostream>
+#include <optional>
 
 namespace
 {
 // Throws exception if model was not loaded. Either no file or faulty gltf.
-auto LoadModel(const std::string_view filename)
+tinygltf::Model LoadModel(const std::string_view filename)
 {
     tinygltf::Model model;
 
@@ -63,13 +65,13 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
             for (const auto& [accessorName, accessorID] : primitive.attributes) {
                 const auto& accessor = model.accessors[accessorID];
 
-                const auto bufferViewID = accessor.bufferView;
+                const auto& bufferViewID = accessor.bufferView;
                 const auto& bufferView = model.bufferViews[bufferViewID];
 
-                const auto bufferID = bufferView.buffer;
+                const auto& bufferID = bufferView.buffer;
                 const auto& buffer = model.buffers[bufferID].data;
 
-                const auto primPointCount = accessor.count;
+                const auto& primPointCount = accessor.count;
                 const auto bufferOffset = accessor.byteOffset + bufferView.byteOffset;
                 const auto stride = accessor.ByteStride(bufferView);
 
@@ -104,56 +106,23 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
     return points;
 }
 
-}  // namespace
-
-AABB CreateInitializerBox()
+std::uint64_t MortonIndex64(const Point& p, const double scale)
 {
-    AABB aabb = {{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-                  std::numeric_limits<float>::infinity()},
-                 {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-                  -std::numeric_limits<float>::infinity()}};
+    const std::int64_t ix = static_cast<int64_t>(p.position.x * scale);
+    const std::int64_t iy = static_cast<int64_t>(p.position.y * scale);
+    const std::int64_t iz = static_cast<int64_t>(p.position.z * scale);
 
-    return aabb;
-}
+    // Test whether the scene, after scaling is too large to represent with a 63 bit morton code
+    // The code may not break regardless but we should make sure that our scenes we want to present fit
+    if (((ix >= (1 << 20)) || (ix < -(1 << 20)) || (iy >= (1 << 20)) || (iy < -(1 << 20)) || (iz >= (1 << 20)) ||
+         (iz < -(1 << 20)))) {
+        throw std::runtime_error("The scene is too large and can not be represented by a 63 bit morton code!");
+    }
 
-BatchedPointCloud LoadScene(std::string_view scene)
-{
-    auto points = LoadScenePoints(scene);
-    // TODO add a hashmap for morton code to make this faster or
-    // Implement this https://ieeexplore.ieee.org/document/5383353
-    std::sort(points.begin(), points.end());
-
-    auto batch = Batch(0U, 0ULL, std::span(points), CreateInitializerBox());
-
-    BatchedPointCloud batched{std::move(points), std::move(batch.Subdivide())};
-    return batched;
-}
-
-bool Point::operator<(const Point& q) const { return this->MortonIndex() < q.MortonIndex(); }
-
-std::uint64_t Point::MortonIndex() const
-{
-    auto ix = reinterpret_cast<const std::uint32_t&>(position.x);
-    auto iy = reinterpret_cast<const std::uint32_t&>(position.y);
-    auto iz = reinterpret_cast<const std::uint32_t&>(position.z);
-
-    // Get signed bit
-    const auto ixs = static_cast<const std::int32_t>(ix) >> 31U;
-    const auto iys = static_cast<const std::int32_t>(iy) >> 31U;
-    const auto izs = static_cast<const std::int32_t>(iz) >> 31U;
-
-    // This is a combination of a fast absolute value and a bias.
-    //
-    // We need to adjust the values so -FLT_MAX is close to 0.
-    //
-    ix = (((ix & 0x7FFFFFFFUL) ^ ixs) - ixs) + 0x7FFFFFFFUL;
-    iy = (((iy & 0x7FFFFFFFUL) ^ iys) - iys) + 0x7FFFFFFFUL;
-    iz = (((iz & 0x7FFFFFFFUL) ^ izs) - izs) + 0x7FFFFFFFUL;
-
-    // We will only use the 21 MSBs
-    std::uint64_t xx = ix >> 11U;
-    std::uint64_t yy = iy >> 11U;
-    std::uint64_t zz = iz >> 11U;
+    // Mask out lowest 21 bits
+    std::uint64_t xx = ix & (0b111111111111111111111);
+    std::uint64_t yy = iy & (0b111111111111111111111);
+    std::uint64_t zz = iz & (0b111111111111111111111);
 
     // Dilate and combine
     xx = (xx | (xx << 32U)) & 0x001f00000000ffffLL;
@@ -178,83 +147,38 @@ std::uint64_t Point::MortonIndex() const
 
     return xx | (yy << 1U) | (zz << 2U);
 }
+}  // namespace
 
-Batch::Batch(const std::uint32_t iteration, const std::uint64_t mortonCode, const std::span<Point> inPoints,
-             const AABB box, const bool isLeaf)
+AABB CreateInitializerBox()
 {
-    // we only support tree depth up to 18
-    if (iteration > 18) {
-        throw std::runtime_error("Tree exceded maximum supported depth");
-    }
-
-    aabb = box;
-    points = inPoints;
-
-    id.leaf = isLeaf;
-    id.iteration = iteration;
-    id.mortonCode = mortonCode;
+    return {{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
+             std::numeric_limits<float>::infinity()},
+            {-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+             -std::numeric_limits<float>::infinity()}};
 }
 
-std::vector<Batch> Batch::Subdivide() const
+std::vector<Point> LoadScene(const std::string_view scene)
 {
-    std::vector<Batch> result;
+    auto points = LoadScenePoints(scene);
 
-    if (points.size() < MaxBatchSize) {
-        result.emplace_back(id.iteration, id.mortonCode, points, aabb, true);
-    } else {
-        std::vector<Batch> children;
-
-        std::uint32_t count = 0;
-        std::uint32_t offset = 0;
-        AABB box = CreateInitializerBox();
-        auto prevPointNodeID = MortonToNodeID(points.begin()->MortonIndex());
-        // splitting points into octree nodes
-        // points_ is already sorted by morton code so points related to the same node are in a contiguous range.
-        // Just find the range and set the span
-        for (auto& point : points) {
-            const auto currPointNodeID = MortonToNodeID(point.MortonIndex());
-
-            // if NodeID changed
-            if (prevPointNodeID != currPointNodeID) {
-                children.emplace_back(id.iteration + 1, NodeIDToMorton(prevPointNodeID), points.subspan(offset, count),
-                                      box);
-
-                offset += count;
-                count = 0;
-                box = CreateInitializerBox();
-                prevPointNodeID = currPointNodeID;
+    float minDistance = std::numeric_limits<float>::max();
+    std::optional<glm::vec3> lastPos;
+    for (const auto& [position, _, __] : points) {
+        if (lastPos.has_value()) {
+            // Ignore points with the same position
+            if (const auto dist = glm::distance(position, lastPos.value()); dist != 0) {
+                minDistance = std::min(minDistance, glm::distance(position, lastPos.value()));
             }
-            ++count;
-
-            box.minV = glm::min(box.minV, point.position);
-            box.maxV = glm::max(box.maxV, point.position);
         }
-        // check if last node has elements and add it
-        if (count != 0) {
-            children.emplace_back(id.iteration + 1, NodeIDToMorton(prevPointNodeID), points.subspan(offset, count),
-                                  box);
-        }
-
-        // combine subdivide results
-        for (auto& child : children) {
-            const auto res = child.Subdivide();
-            result.insert(result.end(), res.begin(), res.end());
-        }
+        lastPos = position;
     }
+    // Apply safety factor
+    const double scale = 1.2 / minDistance;
 
-    return result;
+    std::for_each(std::execution::par_unseq, points.begin(), points.end(),
+                  [&scale](Point& p) { p.mortonCode = MortonIndex64(p, scale); });
+
+    return points;
 }
 
-std::uint32_t Batch::MortonToNodeID(const std::uint64_t mortonCode) const
-{
-    // NodeID is a three bit number taken of the morton code according to node level in the tree.
-    // iteration(Node Level) 0 means the root Node. MortonCode used is a 63 bit mortoncode. Mask with 0b0111.
-    return (mortonCode >> (60U - id.iteration * 3U)) & 0x7U;
-}
-
-std::uint64_t Batch::NodeIDToMorton(const std::uint32_t nodeID) const
-{
-    // MortonCode limit used by the tree is 57 bits.
-    // To get the Morton Code: shift the nodeID to correct iteartion bits and combine with parents Morton code.
-    return (static_cast<std::uint64_t>(nodeID) << (54U - id.iteration * 3U)) | id.mortonCode;
-}
+bool Point::operator<(const Point& q) const { return mortonCode < q.mortonCode; }
