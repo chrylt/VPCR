@@ -119,10 +119,10 @@ std::uint64_t MortonIndex64(const Point& p, const double scale)
         throw std::runtime_error("The scene is too large and can not be represented by a 63 bit morton code!");
     }
 
-    // Mask out lowest 21 bits, flip highest bit if negative
-    std::uint64_t xx = (ix & (0b111111111111111111111)) ^ (ix < 0 ? 0b100000000000000000000 : 0);
-    std::uint64_t yy = (iy & (0b111111111111111111111)) ^ (iy < 0 ? 0b100000000000000000000 : 0);
-    std::uint64_t zz = (iz & (0b111111111111111111111)) ^ (iz < 0 ? 0b100000000000000000000 : 0);
+    // Mask out lowest 21 bits
+    std::uint64_t xx = ix & (0b111111111111111111111);
+    std::uint64_t yy = iy & (0b111111111111111111111);
+    std::uint64_t zz = iz & (0b111111111111111111111);
 
     // Dilate and combine
     xx = (xx | (xx << 32U)) & 0x001f00000000ffffLL;
