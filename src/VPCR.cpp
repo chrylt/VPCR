@@ -142,11 +142,11 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
     // Print FPS and statistics on window title
     {
         const auto *statistics =
-            reinterpret_cast<const Statistics *>(backend_.getMapping(pipelines_[frameIndex].statisticsDownload));
+            static_cast<const Statistics *>(backend_.getMapping(pipelines_[frameIndex].statisticsDownload));
         if ((currentTime - lastTitleUpdate_).count() / 1000000000.f >= 1.f) {
             lastTitleUpdate_ = std::chrono::high_resolution_clock::now();
 
-            backend_.setWindowTitle(window_, "VPCR, Framerate: " + std::to_string(frameCounter_) +
+            backend_.setWindowTitle(window_, "VPCR, Frame rate: " + std::to_string(frameCounter_) +
                                                  " FPS, Drawn batches: " + std::to_string(statistics->drawnBatches) +
                                                  "/" + std::to_string(pointCloudAcceleration_->GetBatchCount()));
             frameCounter_ = 0;
@@ -247,7 +247,7 @@ void VPCRImpl::CreateDynamicConst()
     // We are using the cubic root of the MaxBatchSize as a heuristic for the size of a batch before it loses precision
     // Generally we would like to know the area in pixels of a projected batch that can be coverd by its content before
     // leaving holes
-    DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(), std::cbrtf(MaxBatchSize)};
+    const DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(), std::cbrtf(MaxBatchSize)};
 
     tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);

@@ -51,7 +51,7 @@ public:
         // the lower levels. We start by inserting points in the highest level, once that has MaxBatchSize many points,
         // the points will overflow into the children as defined by their morton code
         auto rng = std::default_random_engine{};
-        std::shuffle(points.begin(), points.end(), rng);
+        std::ranges::shuffle(points, rng);
         for (const auto& point : points) {
             std::uint8_t depth = 0;
 
