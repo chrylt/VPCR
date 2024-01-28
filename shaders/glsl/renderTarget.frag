@@ -54,8 +54,8 @@ void main()
         float bucketG = float((storedValue >> 32) & 0xFFFF);
         float bucketB = float((storedValue >> 16) & 0xFFFF);
 
-        if(depthBuffer[pixelID].buckets[currIdx].bucketID != depthBuffer[pixelID].buckets[prevIdx].bucketID - 1 
-            || bucketCounter < prevBucketCounter){
+        if(prevIdx != -1 && (depthBuffer[pixelID].buckets[currIdx].bucketID < depthBuffer[pixelID].buckets[prevIdx].bucketID - 1 
+            || bucketCounter < prevBucketCounter)){
             foundMax = true;
             continue;
         }
