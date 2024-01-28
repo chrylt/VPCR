@@ -32,8 +32,8 @@ layout(set = 2, binding = 3) buffer Points_Color{
     uint pointsRgba[];
 };
 
-layout(set = 3, binding = 0) readonly buffer Batches{
-    Batch batches[];  
+layout(set = 3, binding = 0) readonly buffer BatchNodes{
+    Node nodes[];  
 };
 
 layout(set = 3, binding = 1) readonly buffer BatchList{
@@ -41,7 +41,11 @@ layout(set = 3, binding = 1) readonly buffer BatchList{
     uint batchList[];
 };
 
-layout(local_size_x = 128) in;
+layout(set = 4, binding = 0) writeonly buffer Statistics{
+    uint drawnBatches;
+};
+
+layout(local_size_x = 1024) in;
 
 uint getBucketIDFromDepth(const float depth){
     // depth should be in range [0, 1]
@@ -66,143 +70,141 @@ uint64_t convertColor32To64(const uint rgba){
 }
 
 void main(){
+    drawnBatches = batchCount;
 
-    const uint id = gl_GlobalInvocationID.x;
-    if (id >= workerCount){
+    const uint id = gl_GlobalInvocationID.x / gl_WorkGroupSize.x;
+    if (id >= batchCount){
         return;
     }
 
-    const uint workAmount = uint(ceil(float(batchCount) / workerCount));
-    const uint workOffset = workAmount * id;
+    const Node batch = nodes[batchList[id]];
+    const vec3 batchBBSize = vec3(batch.box.maxX, batch.box.maxY, batch.box.maxZ) - vec3(batch.box.minX, batch.box.minY, batch.box.minZ);
+    const uint batchPixelExtend = getBatchPixelExtend(batch, camera.resolution, camera.projection, camera.view);
+    const uint localId = gl_LocalInvocationID.x;
+    const uint pointCount = batch.maskDepthCount >> 13;
+    const uint workAmount = (pointCount / gl_WorkGroupSize.x) + 1;
 
-    for (uint i = workOffset; i < workOffset + workAmount; ++i){
-        if (i >= batchCount){
-            continue;
+    for (uint k = batch.pointOffset + localId * workAmount; k < batch.pointOffset + (localId + 1) * workAmount; ++k){
+        if ((k - batch.pointOffset) >= pointCount){
+            break;
         }
-        const Batch batch = batches[batchList[i]];
-        const vec3 batchBBSize = batch.box.maxV - batch.box.minV;
-        const uint batchPixelExtend = getBatchPixelExtend(batch, camera.resolution, camera.projection, camera.view);
+        const vec4 projected = camera.projection * camera.view * vec4(getAdaptivePointPosition(batchBBSize, vec3(batch.box.minX, batch.box.minY, batch.box.minZ), batchPixelExtend, k), 1);
 
-        for (uint k = batch.pointOffset; k < batch.pointOffset + batch.pointCount; ++k){
+        if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
+                (-projected.w <= projected.y) && (projected.y <= projected.w) &&
+                (0.f <= projected.z) && (projected.z <= projected.w)){
+            // projection is within window
+            const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
 
-            const vec4 projected = camera.projection * camera.view * vec4(getAdaptivePointPosition(batchBBSize, batch.box.minV, batchPixelExtend, k), 1);
+            // add point to depth histogram
+            const float depth = projected.z / abs(projected.w);
+            const uint bucketID = getBucketIDFromDepth(depth);
+            const uint pixelID = getPixelID(camera.resolution, uvec2(coords));
 
-            if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
-                    (-projected.w <= projected.y) && (projected.y <= projected.w) &&
-                    (0.f <= projected.z) && (projected.z <= projected.w)){
-                // projection is within window
-                const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
+            if(depthBuffer[pixelID].startIdx < -1)
+                continue;   // propagate error codes
 
-                // add point to depth histogram
-                const float depth = projected.z / abs(projected.w);
-                const uint bucketID = getBucketIDFromDepth(depth);
-                const uint pixelID = getPixelID(camera.resolution, uvec2(coords));
+            // convert color
+            const uint64_t rgba64 = convertColor32To64(pointsRgba[k]);
 
-                if(depthBuffer[pixelID].startIdx < -1)
-                    continue;   // propagate error codes
+            bool finishedInsertPoint = false;
+            const uint TIMEOUT = 100;
+            uint timeoutCounter = 0;
+            uint bucketCount;
+            while(!finishedInsertPoint && timeoutCounter < TIMEOUT && (bucketCount = depthBuffer[pixelID].bucketCount) < 100){    // try to insert point until it worked or timeout is encountered
+                timeoutCounter += 1;
 
-                // convert color
-                const uint64_t rgba64 = convertColor32To64(pointsRgba[k]);
+                // look for bucket to add to
+                const int startIdx = depthBuffer[pixelID].startIdx;
+                int currIdx = startIdx;
+                int nextIdx;
+                if(startIdx != -1)
+                    nextIdx = depthBuffer[pixelID].buckets[currIdx].nextIdx;
+                else
+                    nextIdx = -1;
 
-                bool finishedInsertPoint = false;
-                const uint TIMEOUT = 100;
-                uint timeoutCounter = 0;
-                uint bucketCount;
-                while(!finishedInsertPoint && timeoutCounter < TIMEOUT && (bucketCount = depthBuffer[pixelID].bucketCount) < 100){    // try to insert point until it worked or timeout is encountered
-                    timeoutCounter += 1;
+                // check for insert as first
+                if(startIdx == -1 || bucketID < depthBuffer[pixelID].buckets[startIdx].bucketID){
+                    // bucket should be inserted as new first bucket
+	                /// allocate new bucket
+                    uint oldBucketCount = atomicCompSwap(depthBuffer[pixelID].bucketCount, bucketCount, bucketCount + 1);
+                    if(oldBucketCount == bucketCount){
+                        // allocation worked
+                        int newIdx = int(oldBucketCount);
+                        initBucket(depthBuffer[pixelID].buckets[newIdx], bucketID, currIdx, rgba64);
 
-                    // look for bucket to add to
-                    const int startIdx = depthBuffer[pixelID].startIdx;
-                    int currIdx = startIdx;
-                    int nextIdx;
-                    if(startIdx != -1)
-                        nextIdx = depthBuffer[pixelID].buckets[currIdx].nextIdx;
-                    else
-                        nextIdx = -1;
+                        /// change references to point to new bucket
+                        int oldValue = atomicCompSwap(depthBuffer[pixelID].startIdx, currIdx, newIdx); 
+                        if(oldValue == currIdx){
+                            // insertion worked
+                            finishedInsertPoint = true;
+                        }
+                    }
+                    continue;
+                }
 
-                    // check for insert as first
-                    if(startIdx == -1 || bucketID < depthBuffer[pixelID].buckets[startIdx].bucketID){
-                        // bucket should be inserted as new first bucket
-	                    /// allocate new bucket
+                bool insertFailed = false;
+                const uint INNER_TIMEOUT = 5;
+                uint inner_timeoutCounter = 0;
+                while(!finishedInsertPoint && !insertFailed && inner_timeoutCounter < INNER_TIMEOUT){
+                    inner_timeoutCounter += 1;
+
+                    // check for buckets with equal ID
+                    if(depthBuffer[pixelID].buckets[currIdx].bucketID == bucketID){
+                        // found fitting bucket - add contribution
+	                    atomicAdd(depthBuffer[pixelID].buckets[currIdx].acc, rgba64);
+                        finishedInsertPoint = true;
+                        continue;
+                    }
+
+                    // check for inbetween insert (or last)
+                    if(depthBuffer[pixelID].buckets[currIdx].bucketID < bucketID 
+                        && (nextIdx == -1 || bucketID < depthBuffer[pixelID].buckets[nextIdx].bucketID)){
+                        // insert between buckets
+                        /// allocate new bucket
+                        /// allocate new bucket
                         uint oldBucketCount = atomicCompSwap(depthBuffer[pixelID].bucketCount, bucketCount, bucketCount + 1);
                         if(oldBucketCount == bucketCount){
                             // allocation worked
                             int newIdx = int(oldBucketCount);
-                            initBucket(depthBuffer[pixelID].buckets[newIdx], bucketID, currIdx, rgba64);
+                            initBucket(depthBuffer[pixelID].buckets[newIdx], bucketID, nextIdx, rgba64);
 
                             /// change references to point to new bucket
-                            int oldValue = atomicCompSwap(depthBuffer[pixelID].startIdx, currIdx, newIdx); 
-                            if(oldValue == currIdx){
-                                // insertion worked
+                            int oldValue = atomicCompSwap(depthBuffer[pixelID].buckets[currIdx].nextIdx, nextIdx, newIdx); 
+                            if(oldValue == nextIdx){
                                 finishedInsertPoint = true;
+                            }else{
+                                insertFailed = true;    // allocated bucket gets wasted here
                             }
+                        }else{
+                            insertFailed = true;
                         }
                         continue;
                     }
 
-                    bool insertFailed = false;
-                    const uint INNER_TIMEOUT = 5;
-                    uint inner_timeoutCounter = 0;
-                    while(!finishedInsertPoint && !insertFailed && inner_timeoutCounter < INNER_TIMEOUT){
-                        inner_timeoutCounter += 1;
-
-                        // check for buckets with equal ID
-                        if(depthBuffer[pixelID].buckets[currIdx].bucketID == bucketID){
-                            // found fitting bucket - add contribution
-	                        atomicAdd(depthBuffer[pixelID].buckets[currIdx].acc, rgba64);
-                            finishedInsertPoint = true;
-                            continue;
-                        }
-
-                        // check for inbetween insert (or last)
-                        if(depthBuffer[pixelID].buckets[currIdx].bucketID < bucketID 
-                            && (nextIdx == -1 || bucketID < depthBuffer[pixelID].buckets[nextIdx].bucketID)){
-                            // insert between buckets
-                            /// allocate new bucket
-                            /// allocate new bucket
-                            uint oldBucketCount = atomicCompSwap(depthBuffer[pixelID].bucketCount, bucketCount, bucketCount + 1);
-                            if(oldBucketCount == bucketCount){
-                                // allocation worked
-                                int newIdx = int(oldBucketCount);
-                                initBucket(depthBuffer[pixelID].buckets[newIdx], bucketID, nextIdx, rgba64);
-
-                                /// change references to point to new bucket
-                                int oldValue = atomicCompSwap(depthBuffer[pixelID].buckets[currIdx].nextIdx, nextIdx, newIdx); 
-                                if(oldValue == nextIdx){
-                                    finishedInsertPoint = true;
-                                }else{
-                                    insertFailed = true;    // allocated bucket gets wasted here
-                                }
-                            }else{
-                                insertFailed = true;
-                            }
-                            continue;
-                        }
-
-                        // end-of-loop operations
-                        currIdx = nextIdx;
-                        if(currIdx != -1)
-                            nextIdx = depthBuffer[pixelID].buckets[currIdx].nextIdx;
-                        else if(!finishedInsertPoint){
-                            insertFailed = true;
-                        }
+                    // end-of-loop operations
+                    currIdx = nextIdx;
+                    if(currIdx != -1)
+                        nextIdx = depthBuffer[pixelID].buckets[currIdx].nextIdx;
+                    else if(!finishedInsertPoint){
+                        insertFailed = true;
+                    }
                         
-                    }
-
-                    if(inner_timeoutCounter == INNER_TIMEOUT){
-                        finishedInsertPoint = true;
-                    }
-
-                    if(currIdx == -1)
-                        depthBuffer[pixelID].startIdx = -3;
                 }
 
-                if(timeoutCounter == TIMEOUT)
-                    depthBuffer[pixelID].startIdx = -2; // error code for outer loop timeout
+                if(inner_timeoutCounter == INNER_TIMEOUT){
+                    finishedInsertPoint = true;
+                }
 
-                if(bucketCount == 100)
-                    depthBuffer[pixelID].startIdx = -4;
+                if(currIdx == -1)
+                    depthBuffer[pixelID].startIdx = -3;
             }
+
+            if(timeoutCounter == TIMEOUT)
+                depthBuffer[pixelID].startIdx = -2; // error code for outer loop timeout
+
+            if(bucketCount == 100)
+                depthBuffer[pixelID].startIdx = -4;
         }
     }
 }

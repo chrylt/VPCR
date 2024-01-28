@@ -1,7 +1,7 @@
 #pragma once
 
-#include <glm/glm.hpp>
 #include <span>
+#include <glm/glm.hpp>
 #include <string_view>
 #include <vector>
 
@@ -24,20 +24,14 @@ struct CompressedColor {
 struct Point {
     glm::vec3 position;
     CompressedColor color;
+    std::uint64_t mortonCode;
 
     bool operator<(const Point& q) const;
-
-    // https://stackoverflow.com/questions/26856268/morton-index-from-2d-point-with-floats
-    static_assert((sizeof(std::uint32_t) == sizeof(float)) && (sizeof(std::uint32_t) * CHAR_BIT == 32) &&
-                      (sizeof(std::uint64_t) * CHAR_BIT == 64),
-                  "We need 32-bit ints and floats, and 64-bit long longs!");
-
-    std::uint64_t MortonIndex() const;
 };
 
 struct AABB {
-    alignas(16) glm::vec3 minV;
-    alignas(16) glm::vec3 maxV;
+    glm::vec3 minV;
+    glm::vec3 maxV;
 };
 
 struct BatchID {
@@ -80,6 +74,7 @@ struct Histogram {
     Bucket buckets[100];  // maximal 100 filled buckets per pixel
 };
 
-BatchedPointCloud LoadScene(std::string_view scene);
+std::vector<Point> LoadScene(std::string_view scene);
+
 
 AABB CreateInitializerBox();

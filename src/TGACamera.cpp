@@ -5,7 +5,8 @@ TGACamera::TGACamera(tga::Interface& tgai, const std::uint32_t resX, const std::
     : backend_(tgai), jaw_(jaw), pitch_(pitch), position_(position), up_(up)
 {
     cam_.resolution = glm::uvec2(resX, resY);
-    cam_.projection = glm::perspective_vk(glm::radians(90.f), resX / static_cast<float>(resY), 0.1f, 1000.f);
+    cam_.projection =
+        glm::perspective_vk(glm::radians(70.f), static_cast<float>(resX) / static_cast<float>(resY), 0.0001f, 50000.f);
 
     const tga::StagingBufferInfo stagingCameraInfo(sizeof(Camera));
     staging_ = backend_.createStagingBuffer(stagingCameraInfo);

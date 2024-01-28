@@ -11,19 +11,19 @@ layout(set = 2, binding = 2) readonly buffer Points_Position_high_Precision{
     uint pointsPosHigh[];
 };
 
-uint getBatchPixelExtend(const Batch currBatch, const uvec2 resolution, const mat4 projection, const mat4 view){
+uint getBatchPixelExtend(const Node currBatch, const uvec2 resolution, const mat4 projection, const mat4 view){
 
     // determine precision by projecting batch aabb to screen
     /// create aabb corner points
     const vec3[8] aabbCorners = vec3[](
-        currBatch.box.minV, // 0 - minimum
-        vec3(currBatch.box.minV.x, currBatch.box.minV.y, currBatch.box.maxV.z), // 0 0 1 -> 1
-        vec3(currBatch.box.minV.x, currBatch.box.maxV.y, currBatch.box.minV.z), // 0 1 0 -> 2
-        vec3(currBatch.box.minV.x, currBatch.box.maxV.y, currBatch.box.maxV.z), // 0 1 1 -> 3
-        vec3(currBatch.box.maxV.x, currBatch.box.minV.y, currBatch.box.minV.z), // 1 0 0 -> 4
-        vec3(currBatch.box.maxV.x, currBatch.box.minV.y, currBatch.box.maxV.z), // 1 0 1 -> 5
-        vec3(currBatch.box.maxV.x, currBatch.box.maxV.y, currBatch.box.minV.z), // 1 1 0 -> 6
-        currBatch.box.maxV  // 7 - maximum
+        vec3(currBatch.box.minX, currBatch.box.minY, currBatch.box.minZ), // 0 - minimum
+        vec3(currBatch.box.minX, currBatch.box.minY, currBatch.box.maxZ), // 0 0 1 -> 1
+        vec3(currBatch.box.minX, currBatch.box.maxY, currBatch.box.minZ), // 0 1 0 -> 2
+        vec3(currBatch.box.minX, currBatch.box.maxY, currBatch.box.maxZ), // 0 1 1 -> 3
+        vec3(currBatch.box.maxX, currBatch.box.minY, currBatch.box.minZ), // 1 0 0 -> 4
+        vec3(currBatch.box.maxX, currBatch.box.minY, currBatch.box.maxZ), // 1 0 1 -> 5
+        vec3(currBatch.box.maxX, currBatch.box.maxY, currBatch.box.minZ), // 1 1 0 -> 6
+        vec3(currBatch.box.maxX, currBatch.box.maxY, currBatch.box.maxZ)  // 7 - maximum
     );
 
     /// find aabb extend on screen
