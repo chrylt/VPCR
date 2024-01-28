@@ -1,17 +1,22 @@
-struct Point {
+struct Point{
     vec3 position;
     uint rgba;
 };
 
-struct AABB {
-    vec3 minV;
-    vec3 maxV;
+struct AABB{
+    float minX;
+    float minY;
+    float minZ;
+    float maxX;
+    float maxY;
+    float maxZ;
 };
 
-struct Batch {
+struct Node{
     AABB box;
+    uint childrenPointer;
     uint pointOffset;
-    uint pointCount;
+    uint maskDepthCount;  // higher 19 bits are the count, lower 8 the child mask, middle 5 the tree depth
 };
 
 uint getPixelID(uvec2 resolution, uvec2 pixelCoord){

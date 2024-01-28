@@ -28,8 +28,8 @@ layout(set = 2, binding = 3) buffer Points_Color{
     uint pointsRgba[];
 };
 
-layout(set = 3, binding = 0) readonly buffer Batches{
-    Batch batches[];  
+layout(set = 3, binding = 0) readonly buffer BatchNodes{
+    Node nodes[];  
 };
 
 layout(set = 3, binding = 1) readonly buffer BatchList{
@@ -37,41 +37,44 @@ layout(set = 3, binding = 1) readonly buffer BatchList{
     uint batchList[];
 };
 
-layout(local_size_x = 128) in;
+layout(set = 4, binding = 0) writeonly buffer Statistics{
+    uint drawnBatches;
+};
+
+layout(local_size_x = 1024) in;
 
 void main(){
+    drawnBatches = batchCount;
 
-    const uint id = gl_GlobalInvocationID.x;
-    if (id >= workerCount){
+    const uint id = gl_GlobalInvocationID.x / gl_WorkGroupSize.x;
+    if (id >= batchCount){
         return;
     }
 
-    const uint workAmount = uint(ceil(float(batchCount) / workerCount));
-    const uint workOffset = workAmount * id;
+    const Node batch = nodes[batchList[id]];
+    const vec3 batchBBSize = vec3(batch.box.maxX, batch.box.maxY, batch.box.maxZ) - vec3(batch.box.minX, batch.box.minY, batch.box.minZ);
+    const uint batchPixelExtend = getBatchPixelExtend(batch, camera.resolution, camera.projection, camera.view);
+    const uint localId = gl_LocalInvocationID.x;
+    const uint pointCount = batch.maskDepthCount >> 13;
+    const uint workAmount = (pointCount / gl_WorkGroupSize.x) + 1;
 
-    for (uint i = workOffset; i < workOffset + workAmount; ++i){
-        if (i >= batchCount){
-            continue;
+    for (uint k = batch.pointOffset + localId * workAmount; k < batch.pointOffset + (localId + 1) * workAmount; ++k){
+        if ((k - batch.pointOffset) >= pointCount){
+            break;
         }
-        const Batch batch = batches[batchList[i]];
-        const vec3 batchBBSize = batch.box.maxV - batch.box.minV;
-        const uint batchPixelExtend = getBatchPixelExtend(batch, camera.resolution, camera.projection, camera.view);
 
-        for (uint k = batch.pointOffset; k < batch.pointOffset + batch.pointCount; ++k){
+        const vec4 projected = camera.projection * camera.view * vec4(getAdaptivePointPosition(batchBBSize, vec3(batch.box.minX, batch.box.minY, batch.box.minZ), batchPixelExtend, k), 1);
 
-            const vec4 projected = camera.projection * camera.view * vec4(getAdaptivePointPosition(batchBBSize, batch.box.minV, batchPixelExtend, k), 1);
+        if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
+                (-projected.w <= projected.y) && (projected.y <= projected.w) &&
+                (0.f <= projected.z) && (projected.z <= projected.w)){
+            // projection is within window
+            const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
 
-            if((-projected.w <= projected.x) && (projected.x <= projected.w) &&
-                    (-projected.w <= projected.y) && (projected.y <= projected.w) &&
-                    (0.f <= projected.z) && (projected.z <= projected.w)){
-                // projection is within window
-                const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
+            // depth test via atomic min
+            const uint depth = floatBitsToUint(projected.w);
 
-                // depth test via atomic min
-                const uint depth = floatBitsToUint(projected.w);
-
-                imageAtomicMin(depthBuffer, ivec2(coords), depth);
-            }
+            imageAtomicMin(depthBuffer, ivec2(coords), depth);
         }
     }
 }

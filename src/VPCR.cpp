@@ -27,6 +27,8 @@ private:
 
     struct Pipeline {
         tga::Buffer batchList;
+        tga::Buffer statistics;
+        tga::StagingBuffer statisticsDownload;
         tga::Buffer renderTarget;
         tga::Texture depthBuffer;
         std::unique_ptr<TGAComputePass> clearPass;
@@ -40,6 +42,11 @@ private:
     struct DynamicConst {
         // Misc information we need on gpu
         std::uint32_t totalBatchCount;
+        float lodExtend;
+    };
+
+    struct Statistics {
+        std::uint32_t drawnBatches;
     };
 
     void OnUpdate(std::uint32_t frameIndex);
@@ -49,6 +56,7 @@ private:
     void CreateBatchList();
     void CreateRenderTarget();
     void CreateDepthBuffer();
+    void CreateStatisticsReadbackBuffer();
 
     void CreateClearPass();
     void CreateLODPass();
@@ -106,6 +114,7 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     CreateBatchList();
     CreateRenderTarget();
     CreateDepthBuffer();
+    CreateStatisticsReadbackBuffer();
 
     // Create Passes
     CreateClearPass();
@@ -133,12 +142,16 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
 
     ++frameCounter_;
 
-    // Print FPS on window title
+    // Print FPS and statistics on window title
     {
+        const auto *statistics =
+            static_cast<const Statistics *>(backend_.getMapping(pipelines_[frameIndex].statisticsDownload));
         if ((currentTime - lastTitleUpdate_).count() / 1000000000.f >= 1.f) {
             lastTitleUpdate_ = std::chrono::high_resolution_clock::now();
 
-            backend_.setWindowTitle(window_, "VPCR, Framerate: " + std::to_string(frameCounter_) + " FPS");
+            backend_.setWindowTitle(window_, "VPCR, Frame rate: " + std::to_string(frameCounter_) +
+                                                 " FPS, Drawn batches: " + std::to_string(statistics->drawnBatches) +
+                                                 "/" + std::to_string(pointCloudAcceleration_->GetBatchCount()));
             frameCounter_ = 0;
         }
     }
@@ -202,8 +215,15 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
 
     auto commandRecorder = tga::CommandRecorder{backend_, commandBuffer};
 
+    // Readback
+    commandRecorder.bufferDownload(pipelines_[frameIndex].statistics, pipelines_[frameIndex].statisticsDownload,
+                                   sizeof(Statistics));
+
     // Upload
     camera_->Upload(commandRecorder);
+    // Set the batch count to 0 as the LOD pass will determine the batches to be rendered
+    constexpr std::uint32_t zero = 0;
+    commandRecorder.inlineBufferUpdate(pipelines_[frameIndex].batchList, &zero, sizeof(zero));
     commandRecorder.barrier(tga::PipelineStage::Transfer, tga::PipelineStage::ComputeShader);
 
     // Collect Execution Commands
@@ -230,7 +250,10 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
 
 void VPCRImpl::CreateDynamicConst()
 {
-    DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount()};
+    // We are using the cubic root of the MaxBatchSize as a heuristic for the size of a batch before it loses precision
+    // Generally we would like to know the area in pixels of a projected batch that can be coverd by its content before
+    // leaving holes
+    const DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(), std::cbrtf(MaxBatchSize)};
 
     tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);
@@ -281,6 +304,16 @@ void VPCRImpl::CreateDepthBuffer()
     }
 }
 
+void VPCRImpl::CreateStatisticsReadbackBuffer()
+{
+    for (auto& pipeline : pipelines_) {
+        tga::StagingBufferInfo stagingInfo{sizeof(Statistics)};
+        pipeline.statisticsDownload = backend_.createStagingBuffer(stagingInfo);
+        const tga::BufferInfo info{tga::BufferUsage::storage, sizeof(Statistics), pipeline.statisticsDownload};
+        pipeline.statistics = backend_.createBuffer(info);
+    }
+}
+
 void VPCRImpl::CreateClearPass()
 {
     for (auto& pipeline : pipelines_) {
@@ -313,9 +346,7 @@ void VPCRImpl::CreateLODPass()
 
         const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
                                             {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
-                                            // Set = 1: Acceleration structure
-                                            {{{tga::BindingType::storageBuffer}}},
-                                            // Set = 2: Batches, Batch List
+                                            // Set = 1: Batches, Batch List
                                             {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}}});
 
         const tga::ComputePassInfo passInfo(computeShader, inputLayout);
@@ -323,9 +354,8 @@ void VPCRImpl::CreateLODPass()
 
         lodPass->BindInput(camera_->GetBuffer(), 0, 0);
         lodPass->BindInput(dynamicConst_, 0, 1);
-        lodPass->BindInput(pointCloudAcceleration_->GetAccelerationStructureBuffer(), 1);
-        lodPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 2, 0);
-        lodPass->BindInput(pipeline.batchList, 2, 1);
+        lodPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 1, 0);
+        lodPass->BindInput(pipeline.batchList, 1, 1);
     }
 }
 
@@ -351,7 +381,9 @@ void VPCRImpl::CreateDepthPass()
                                               {tga::BindingType::storageBuffer},
                                               {tga::BindingType::storageBuffer}}},
                                             // Set = 3: Batches, Batch list
-                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}}});
+                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}},
+                                            // Set = 4: Statistics
+                                            {{{tga::BindingType::storageBuffer}}}});
 
         const tga::ComputePassInfo passInfo(computeShader, inputLayout);
         depthPass = std::make_unique<TGAComputePass>(backend_, passInfo);
@@ -370,6 +402,7 @@ void VPCRImpl::CreateDepthPass()
 
         depthPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 3, 0);
         depthPass->BindInput(pipeline.batchList, 3, 1);
+        depthPass->BindInput(pipeline.statistics, 4, 0);
     }
 }
 
@@ -393,7 +426,9 @@ void VPCRImpl::CreateColorPass()
                                               {tga::BindingType::storageBuffer},
                                               {tga::BindingType::storageBuffer}}},
                                             // Set = 3: Batches, Batch list
-                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}}});
+                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}},
+                                            // Set = 4: Statistics
+                                            {{{tga::BindingType::storageBuffer}}}});
 
         const tga::ComputePassInfo passInfo(computeShader, inputLayout);
         colorPass = std::make_unique<TGAComputePass>(backend_, passInfo);
@@ -412,6 +447,7 @@ void VPCRImpl::CreateColorPass()
 
         colorPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 3, 0);
         colorPass->BindInput(pipeline.batchList, 3, 1);
+        colorPass->BindInput(pipeline.statistics, 4, 0);
     }
 }
 

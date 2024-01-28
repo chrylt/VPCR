@@ -17,7 +17,6 @@ public:
     TGAPointCloudAcceleration(tga::Interface &tgai, std::string_view scenePath);
 
     PointBuffers GetPointsBufferPack() const;
-    tga::Buffer GetAccelerationStructureBuffer() const;
     tga::Buffer GetBatchesBuffer() const;
 
     std::uint32_t GetBatchCount() const;
@@ -25,11 +24,10 @@ public:
     ~TGAPointCloudAcceleration();
 
 private:
-    tga::Interface &backend_;
+    tga::Interface& backend_;
 
     std::uint32_t batchCount_;
 
     PointBuffers pointsBufferPack_;
-    tga::Buffer accelerationBuffer_;
     tga::Buffer batchesBuffer_;
 };
