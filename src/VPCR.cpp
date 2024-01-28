@@ -225,7 +225,7 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
 
 void VPCRImpl::CreateDynamicConst()
 {
-    DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(), 1000};
+    DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(), 1u << 31};
 
     tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);
@@ -385,7 +385,7 @@ void VPCRImpl::CreateDisplayPass()
             // Set = 0: Camera, DynamicConst
             {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
             // Set = 1: RenderTarget, DepthBuffer
-            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageImage}}}
+            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}}
         });
 
         const tga::RenderPassInfo passInfo(vertexShader, fragmentShader, window_, {}, inputLayout,
