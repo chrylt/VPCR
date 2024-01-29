@@ -1,0 +1,33 @@
+#version 460
+#extension GL_ARB_gpu_shader_int64 : enable
+#extension GL_KHR_vulkan_glsl : enable
+#include "utility_common.glsl"
+
+layout(set = 0, binding = 0) uniform Camera{
+    mat4 view;
+    mat4 projection;
+    vec3 direction;
+    vec3 position;
+    uvec2 resolution;
+}camera;
+
+layout(set = 0, binding = 1) uniform DynamicConst{
+    uint totalBatchCount;
+};
+
+layout(set = 1, binding = 0) buffer DEPTH_BUFFER{ 
+    Histogram depthBuffer[];
+};
+
+layout(local_size_x = 1024) in;
+
+void main()
+{
+    const ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+    if (id.x >= camera.resolution.x || id.y >= camera.resolution.y){
+        return;
+    }
+    const uint pixelIdx = getPixelID(camera.resolution, id);
+    depthBuffer[pixelIdx].startIdx = -1;
+    depthBuffer[pixelIdx].bucketCount = 0;
+}

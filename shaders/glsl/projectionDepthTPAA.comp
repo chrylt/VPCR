@@ -13,13 +13,16 @@ layout(set = 0, binding = 0) uniform Camera{
 }camera;
 
 layout(set = 0, binding = 1) uniform DynamicConst{
-    uint totalBatchCount;
+    uint workerCount;
 };
 
-layout(set = 1, binding = 0, r32ui) uniform uimage2D renderTarget;
+layout(set = 1, binding = 0) buffer RENDER_TARGET{
+    uint64_t renderTarget[];
+};
+
 layout(set = 1, binding = 1, r32ui) uniform uimage2D depthBuffer;
 
-// input layout for vertex precision in common file
+// Vertex Precision Buffers are in vertex_precision_common file
 
 layout(set = 2, binding = 3) buffer Points_Color{
     uint pointsRgba[];
@@ -68,14 +71,10 @@ void main(){
             // projection is within window
             const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
 
-            // depth test via 32-bit-atomicMin
+            // depth test via atomic min
             const uint depth = floatBitsToUint(projected.w);
 
-            const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
-
-            if(depth < oldValue){
-	            imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
-            }
+            imageAtomicMin(depthBuffer, ivec2(coords), depth);
         }
     }
 }
