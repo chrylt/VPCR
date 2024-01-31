@@ -83,4 +83,11 @@ void main()
 
     if(depthBuffer[pixelID].startIdx == -3)
         color = vec4(0, 0, 1, 1);   //print blue when bucketCount is at limit
+
+    // visualize bucketIDs @Atzubi TODO: toggle
+    /*const int startIdx = depthBuffer[pixelID].startIdx;
+    if(startIdx != -1){
+        const uint foremostBucketID = depthBuffer[pixelID].buckets[startIdx].bucketID; 
+        color = vec4(unpackUnorm4x8(wang_hash(foremostBucketID)).rgb, 1);
+    }*/
 }

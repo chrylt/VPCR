@@ -67,7 +67,7 @@ private:
     struct DynamicConst {
         // Misc information we need on gpu
         std::uint32_t totalBatchCount;
-        std::uint32_t depthDiscSteps;
+        float depthStepSize;
         float lodExtend;
     };
 
@@ -416,7 +416,9 @@ void VPCRImpl::CreateDynamicConst()
     // We are using the cubic root of the MaxBatchSize as a heuristic for the size of a batch before it loses precision
     // Generally we would like to know the area in pixels of a projected batch that can be coverd by its content before
     // leaving holes
-    const DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(), 1u << 31, std::cbrtf(MaxBatchSize)};
+    const DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(),
+                                    1000.0f / static_cast<float>(std::numeric_limits<int>::max()),
+                                    std::cbrtf(MaxBatchSize)};
 
     tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);
