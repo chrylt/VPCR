@@ -140,7 +140,7 @@ void main(){
                 }
 
                 bool insertFailed = false;
-                const uint INNER_TIMEOUT = 5;
+                const uint INNER_TIMEOUT = 10;
                 uint inner_timeoutCounter = 0;
                 while(!finishedInsertPoint && !insertFailed && inner_timeoutCounter < INNER_TIMEOUT){
                     inner_timeoutCounter += 1;

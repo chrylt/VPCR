@@ -33,7 +33,7 @@ void main()
 
     bool foundMax = false;
     bool overflowDetected = false;
-    uint TIMEOUT = 5;
+    uint TIMEOUT = 1;
     uint timeoutCounter = 0;
     while(!foundMax && currIdx != -1 && !overflowDetected && timeoutCounter < TIMEOUT){
         timeoutCounter += 1;
