@@ -4,3 +4,15 @@
 [submodule "external/GUI/imgui"]
 	path = external/GUI/imgui
 	url = https://github.com/ocornut/imgui
+[submodule "external/TGA/external/glfw"]
+	path = external/TGA/external/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "external/TGA/external/glm"]
+	path = external/TGA/external/glm
+	url = https://github.com/g-truc/glm.git
+[submodule "external/TGA/external/stb"]
+	path = external/TGA/external/stb
+	url = https://github.com/nothings/stb.git
+[submodule "external/TGA/external/tinyobjloader"]
+	path = external/TGA/external/tinyobjloader
+	url = https://github.com/tinyobjloader/tinyobjloader.git
