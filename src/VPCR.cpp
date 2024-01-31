@@ -416,8 +416,9 @@ void VPCRImpl::CreateDynamicConst()
     // We are using the cubic root of the MaxBatchSize as a heuristic for the size of a batch before it loses precision
     // Generally we would like to know the area in pixels of a projected batch that can be coverd by its content before
     // leaving holes
+    constexpr float depthStepSize = (1000.0f / static_cast<float>(std::numeric_limits<int>::max())) * 10'000;
     const DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(),
-                                    1000.0f / static_cast<float>(std::numeric_limits<int>::max()),
+                                    depthStepSize,
                                     std::cbrtf(MaxBatchSize)};
 
     tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst)};
