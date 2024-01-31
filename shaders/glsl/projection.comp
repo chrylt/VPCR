@@ -158,10 +158,16 @@ void main(){
             // depth test via 32-bit-atomicMin
             const uint depth = floatBitsToUint(projected.w);
 
-            const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
+            /// early depth test
+            const uint depthFetch = imageLoad(depthBuffer, ivec2(coords)).x;
 
-            if(depth < oldValue){
-	            imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
+            if(depth < depthFetch){
+                const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
+
+                // replace color, when depth changed
+                if(depth < oldValue){
+	                imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
+                }
             }
         }
     }
