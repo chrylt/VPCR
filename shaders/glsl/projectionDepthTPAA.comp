@@ -71,10 +71,15 @@ void main(){
             // projection is within window
             const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
 
-            // depth test via atomic min
+            // depth test via 32-bit-atomicMin
             const uint depth = floatBitsToUint(projected.w);
 
-            imageAtomicMin(depthBuffer, ivec2(coords), depth);
+            /// early depth test
+            const uint depthFetch = imageLoad(depthBuffer, ivec2(coords)).x;
+
+            if(depth < depthFetch){
+                imageAtomicMin(depthBuffer, ivec2(coords), depth);
+            }
         }
     }
 }
