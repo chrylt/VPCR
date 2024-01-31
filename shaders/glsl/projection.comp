@@ -11,11 +11,13 @@ layout(set = 0, binding = 0) uniform Camera{
     vec3 direction;
     vec3 position;
     uvec2 resolution;
+    uvec2 padding;
+    float nearFarDistance;
 }camera;
 
 layout(set = 0, binding = 1) uniform DynamicConst{
     uint workerCount;
-    uint depthDiscSteps;
+    float depthStepSize;
 };
 
 layout(set = 1, binding = 0) buffer RENDER_TARGET{
@@ -49,7 +51,7 @@ layout(local_size_x = 1024) in;
 
 uint getBucketIDFromDepth(const float depth){
     // depth should be in range [0, 1]
-    return uint(depth * depthDiscSteps);
+    return uint(depth * camera.nearFarDistance / depthStepSize);
 };
 
 void initBucket(inout Bucket bucket, const uint bucketID, const int nextIdx, const uint64_t acc){

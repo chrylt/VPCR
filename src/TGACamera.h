@@ -12,6 +12,7 @@ public:
         alignas(16) glm::vec3 direcction = glm::vec3(0, 0, 1);
         alignas(16) glm::vec3 position = glm::vec3(0, 0, 1);
         alignas(16) glm::uvec2 resolution = glm::uvec2(1, 1);
+        alignas(16) float nearFarDistance;
     };
 
     TGACamera(tga::Interface& tgai, std::uint32_t resX, std::uint32_t resY, glm::vec3 position = glm::vec3(0),
