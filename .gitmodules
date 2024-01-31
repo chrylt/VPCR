@@ -4,3 +4,6 @@
 [submodule "external/TGLTF/tinygltf"]
 	path = external/TGLTF/tinygltf
 	url = https://github.com/syoyo/tinygltf
+[submodule "external/GUI/imgui"]
+	path = external/GUI/imgui
+	url = https://github.com/ocornut/imgui
