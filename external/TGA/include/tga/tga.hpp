@@ -137,7 +137,7 @@ private:
     void textureDownload(CommandBuffer, Texture src, StagingBuffer dst, size_t dstOffset);
     void endCommandBuffer(CommandBuffer);
 
-private:
+public:
     struct InternalState;
     std::unique_ptr<InternalState> state;
 };
@@ -248,7 +248,7 @@ public:
         return result;
     }
 
-private:
+public:
     Interface& tgai;
     CommandBuffer cmdBuffer;
 };
