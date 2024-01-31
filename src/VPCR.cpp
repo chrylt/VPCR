@@ -7,6 +7,10 @@
 #include "TGAPointCloudAcceleration.h"
 #include "Utils.h"
 
+#include "imgui/imgui.h"
+#include "imgui/backends/imgui_impl_glfw.h"
+#include "imgui/backends/imgui_impl_vulkan.h"
+
 namespace
 {
 // Should match compute shaders
@@ -61,6 +65,9 @@ private:
     void CreateLODPass();
     void CreateProjectionPass();
     void CreateDisplayPass();
+
+    void InitGui();
+    void BuildGuiCommand(VkCommandBuffer cmdBuffer);
 
     Config config_;
     tga::Interface backend_;
@@ -119,6 +126,9 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     CreateLODPass();
     CreateProjectionPass();
     CreateDisplayPass();
+
+    // init GUI
+    InitGui();
 }
 
 void VPCRImpl::Run()
@@ -231,6 +241,9 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
     projectionPass->Execute(commandRecorder, batchCount);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::FragmentShader);
     displayPass->Execute(commandRecorder, frameIndex);
+
+    // GUI Execution Commands
+    BuildGuiCommand(backend_.state.get()->getData(commandRecorder.cmdBuffer).cmdBuffer);
 
     // Execute
     commandBuffer = commandRecorder.endRecording();
@@ -419,6 +432,45 @@ void VPCRImpl::CreateDisplayPass()
     }
 }
 
+void VPCRImpl::InitGui()
+{
+    const auto& backend = backend_.state;
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    const auto& windowHandle = std::any_cast<GLFWwindow *>(backend->wsi.getWindow(window_).nativeHandle);
+    ImGui_ImplGlfw_InitForVulkan(windowHandle, true);
+
+    ImGui_ImplVulkan_InitInfo init_info = {0};
+    init_info.Instance = backend->instance;
+    init_info.PhysicalDevice = backend->pDevice;
+    init_info.Device = backend->device;
+    init_info.QueueFamily = backend->renderQueueFamily;
+    init_info.Queue = backend->renderQueue;
+    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    init_info.ImageCount = backend_.backbufferCount(window_);
+    init_info.MinImageCount = 2;  // Do we have a way to get minimum supprted ?
+
+    std::vector<vk::DescriptorPoolSize> poolSizes({{vk::DescriptorType::eCombinedImageSampler, 10}});
+    const auto& descriptorPoolCreateInfo = vk::DescriptorPoolCreateInfo().setMaxSets(1).setPoolSizes(poolSizes);
+    init_info.DescriptorPool = backend->device.createDescriptorPool(descriptorPoolCreateInfo);
+
+    // This should be fine since renderpass is only used to build imgui pipeline
+    ImGui_ImplVulkan_Init(&init_info, backend->renderPasses.data[0].renderPass);
+}
+
+void VPCRImpl::BuildGuiCommand(VkCommandBuffer cmdBuffer)
+{
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::ShowDemoWindow();
+
+    ImGui::Render();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer, VK_NULL_HANDLE);
+}
 }  // namespace
 
 std::unique_ptr<VPCR> CreateVPCR(Config config) { return std::make_unique<VPCRImpl>(std::move(config)); }
