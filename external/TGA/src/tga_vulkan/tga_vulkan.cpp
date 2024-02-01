@@ -1494,7 +1494,7 @@ void Interface::initGUI(Window window)
     const auto& windowHandle = std::any_cast<GLFWwindow *>(state->wsi.getWindow(window).nativeHandle);
     ImGui_ImplGlfw_InitForVulkan(windowHandle, true);
 
-    ImGui_ImplVulkan_InitInfo init_info = {0};
+    ImGui_ImplVulkan_InitInfo init_info = {};
     init_info.Instance = state->instance;
     init_info.PhysicalDevice = state->pDevice;
     init_info.Device = state->device;
