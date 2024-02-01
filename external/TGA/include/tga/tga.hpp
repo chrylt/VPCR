@@ -99,6 +99,8 @@ public:
      */
     std::pair<uint32_t, uint32_t> screenResolution();
 
+    void initGUI(Window window);
+
     // Freedom
     void free(Shader);
     void free(StagingBuffer);
@@ -136,6 +138,9 @@ private:
     void bufferDownload(CommandBuffer, Buffer src, StagingBuffer dst, size_t size, size_t srcOffset, size_t dstOffset);
     void textureDownload(CommandBuffer, Texture src, StagingBuffer dst, size_t dstOffset);
     void endCommandBuffer(CommandBuffer);
+
+    void guiStartFrame();
+    void guiEndFrame(CommandBuffer cmdBuffer);
 
 public:
     struct InternalState;
@@ -246,6 +251,17 @@ public:
         auto result = cmdBuffer;
         cmdBuffer = {};
         return result;
+    }
+
+    CommandRecorder& guiStartFrame()
+    {
+        tgai.guiStartFrame();
+        return *this;
+    }
+    CommandRecorder& guiEndFrame()
+    {
+        tgai.guiEndFrame(cmdBuffer);
+        return *this;
     }
 
 public:

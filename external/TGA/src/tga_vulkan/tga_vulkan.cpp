@@ -4,6 +4,9 @@
 
 #include "tga/tga_vulkan/tga_vulkan.hpp"
 
+#include "imgui/backends/imgui_impl_glfw.h"
+#include "imgui/backends/imgui_impl_vulkan.h"
+#include "imgui/imgui.h"
 #include "tga/tga_vulkan/tga_vulkan_debug.hpp"
 #include "tga/tga_vulkan/tga_vulkan_extensions.hpp"
 
@@ -1482,6 +1485,49 @@ bool Interface::keyDown(Window window, Key key) { return state->wsi.keyDown(wind
 std::pair<int, int> Interface::mousePosition(Window window) { return state->wsi.mousePosition(window); }
 
 std::pair<uint32_t, uint32_t> Interface::screenResolution() { return state->wsi.screenResolution(); }
+
+void Interface::initGUI(Window window)
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    const auto& windowHandle = std::any_cast<GLFWwindow *>(state->wsi.getWindow(window).nativeHandle);
+    ImGui_ImplGlfw_InitForVulkan(windowHandle, true);
+
+    ImGui_ImplVulkan_InitInfo init_info = {0};
+    init_info.Instance = state->instance;
+    init_info.PhysicalDevice = state->pDevice;
+    init_info.Device = state->device;
+    init_info.QueueFamily = state->renderQueueFamily;
+    init_info.Queue = state->renderQueue;
+    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    init_info.ImageCount = backbufferCount(window);
+    init_info.MinImageCount = 2;  // Do we have a way to get minimum supprted ?
+
+    std::vector<vk::DescriptorPoolSize> poolSizes({{vk::DescriptorType::eCombinedImageSampler, 10}});
+    const auto& descriptorPoolCreateInfo = vk::DescriptorPoolCreateInfo().setMaxSets(1).setPoolSizes(poolSizes);
+    init_info.DescriptorPool = state->device.createDescriptorPool(descriptorPoolCreateInfo);
+
+    // This should be fine since renderpass is only used to build imgui pipeline
+    state->renderPasses.data.empty()
+        ? throw std::runtime_error("[TGA Vulkan] Trying to init GUI before creating any renderPass!")
+        : ImGui_ImplVulkan_Init(&init_info, state->renderPasses.data[0].renderPass);
+}
+
+void Interface::guiStartFrame()
+{
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+}
+
+void Interface::guiEndFrame(CommandBuffer cmdBuffer)
+{
+    auto& cmdData = state->getData(cmdBuffer);
+
+    ImGui::Render();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdData.cmdBuffer, VK_NULL_HANDLE);
+}
 
 void Interface::free(Shader shader)
 {
