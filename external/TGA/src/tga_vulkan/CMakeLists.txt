@@ -9,8 +9,11 @@ add_library(tga_vulkan tga_vulkan.cpp tga_vulkan_extensions.cpp)#${TGA_LIBRARY_H
 target_include_directories(tga_vulkan PRIVATE Vulkan::Vulkan)
 target_link_libraries(tga_vulkan PUBLIC Vulkan::Vulkan)
 target_link_libraries(tga_vulkan PRIVATE tga_vulkan_wsi)
+target_link_libraries(tga_vulkan PRIVATE ${GUI_LIBRARIES})
+
 target_include_directories(tga_vulkan PUBLIC ${TGA_INCLUDE_DIR})
 target_include_directories(tga_vulkan PUBLIC ${GLM_INCLUDE_DIRS})
+target_include_directories(tga_vulkan PUBLIC ${GUI_INCLUDE_DIRS})
 
 #include(CheckIPOSupported)
 #check_ipo_supported(RESULT ipo_result OUTPUT ipo_output)

@@ -64,6 +64,18 @@ else()
 	set(GLFW_INCLUDE_DIRS ${GLFW_INCLUDE_DIR})
 endif()
 
+#add imgui
+file(GLOB GUI_SRC "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/*.cpp"
+				  "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends/imgui_impl_glfw.cpp"
+				  "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends/imgui_impl_vulkan.cpp")
+add_library(GUI ${GUI_SRC})
+target_link_libraries(GUI tga_vulkan)
+set(GUI_INCLUDE_DIRS
+	${CMAKE_CURRENT_SOURCE_DIR}/external
+	${CMAKE_CURRENT_SOURCE_DIR}/external/imgui
+	${CMAKE_CURRENT_SOURCE_DIR}/external/backends
+	${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/examples/libs/glfw/include)
+set(GUI_LIBRARIES GUI)
 
 add_subdirectory(src)
 
