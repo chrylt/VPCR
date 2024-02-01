@@ -1,6 +1,8 @@
 #version 460
 #extension GL_ARB_gpu_shader_int64 : enable
-#extension GL_KHR_vulkan_glsl : enable
+#extension GL_KHR_shader_subgroup_clustered : enable
+#extension GL_KHR_shader_subgroup_shuffle : enable
+#extension GL_NV_shader_subgroup_partitioned : enable
 
 struct Point{
     vec3 position;
@@ -33,6 +35,8 @@ layout(set = 0, binding = 0) uniform Camera{
 
 layout(set = 0, binding = 1) uniform DynamicConst{
     uint totalBatchCount;
+    float lodExtend;
+    uint warpWideDeduplication;
 };
 
 layout(set = 1, binding = 0, r32ui) uniform uimage2D renderTarget;
@@ -127,6 +131,19 @@ vec3 getAdaptivePointPosition(const vec3 batchBoxSize, const vec3 batchBoxMin, c
     return resultPosition;
 }
 
+uint subgroupPartitionMin(ivec2 coords, uint depth)
+{
+    uint minDepth = depth;
+
+    for (uint i = 0; i < gl_SubgroupSize; i++)
+    {
+        if(coords == subgroupShuffle(coords, i))
+            minDepth = min(minDepth, subgroupShuffle(depth, i));
+    }
+
+    return minDepth;
+}
+
 void main(){
     drawnBatches = batchCount;
 
@@ -158,10 +175,43 @@ void main(){
             // depth test via 32-bit-atomicMin
             const uint depth = floatBitsToUint(projected.w);
 
-            const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
+            if(warpWideDeduplication == 0)
+            {
+                const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
+                if(depth < oldValue){
+	                imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
+                }
+            }
+            else if(warpWideDeduplication == 1)
+            {
+                const ivec2 coordsXOr = subgroupClusteredXor( ivec2(coords) , 2);
+                const uint minDepth = subgroupClusteredMin( depth , 2);
 
-            if(depth < oldValue){
-	            imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
+                if(coordsXOr.x != 0 || coordsXOr.y != 0 || minDepth == depth)
+                {
+                    const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
+                    if(depth < oldValue){
+	                    imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
+                    }
+                }
+            }
+            else if(warpWideDeduplication == 2)
+            {
+// GL_NV_shader_subgroup_partitioned is not working as expected.
+// GL_NV_gpu_shader5 should only be availble on Nvidia hardware so we use it.
+#if defined(GL_NV_gpu_shader5) && defined(GL_NV_shader_subgroup_partitioned)
+                const uvec4 mask = subgroupPartitionNV(ivec2(coords));
+                const uint minDepth = subgroupPartitionedMinNV(depth , mask);
+#else
+                uint minDepth = subgroupPartitionMin(ivec2(coords), depth);
+#endif
+                if (minDepth == depth)
+                {
+                    const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
+                    if(depth < oldValue){
+	                    imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
+                    }
+                }
             }
         }
     }

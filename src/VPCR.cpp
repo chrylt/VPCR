@@ -38,10 +38,13 @@ private:
         tga::CommandBuffer commandBuffer;
     };
 
+    enum WarpWideDeduplicationSetting : std::uint32_t { None, Pairs, Full, COUNT };
+
     struct DynamicConst {
         // Misc information we need on gpu
         std::uint32_t totalBatchCount;
         float lodExtend;
+        WarpWideDeduplicationSetting warpWideDeduplication;
     };
 
     struct Statistics {
@@ -74,7 +77,9 @@ private:
     std::optional<UserInputCache> userInputCache_;
 
     std::unique_ptr<TGACamera> camera_;
-    tga::Buffer dynamicConst_;
+
+    DynamicConst dynamicConst_;
+    tga::Buffer dynamicConstBuffer_;
 
     // One pipeline per frame buffer
     std::vector<Pipeline> pipelines_;
@@ -199,6 +204,15 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
 
         camera_->Update(position, jaw, pitch);
     }
+
+    // Update DynamicConst
+    {
+        if (backend_.keyDown(window_, tga::Key::W)) {
+            const auto newMode = static_cast<WarpWideDeduplicationSetting>((dynamicConst_.warpWideDeduplication + 1) %
+                                                                           WarpWideDeduplicationSetting::COUNT);
+            dynamicConst_.warpWideDeduplication = newMode;
+        }
+    }
 }
 
 void VPCRImpl::OnRender(std::uint32_t frameIndex)
@@ -220,6 +234,8 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
     // Set the batch count to 0 as the LOD pass will determine the batches to be rendered
     constexpr std::uint32_t zero = 0;
     commandRecorder.inlineBufferUpdate(pipelines_[frameIndex].batchList, &zero, sizeof(zero));
+    //update dynamicConstBuffer
+    commandRecorder.inlineBufferUpdate(dynamicConstBuffer_, &dynamicConst_, sizeof(dynamicConst_));
     commandRecorder.barrier(tga::PipelineStage::Transfer, tga::PipelineStage::ComputeShader);
 
     // Collect Execution Commands
@@ -247,12 +263,13 @@ void VPCRImpl::CreateDynamicConst()
     // We are using the cubic root of the MaxBatchSize as a heuristic for the size of a batch before it loses precision
     // Generally we would like to know the area in pixels of a projected batch that can be coverd by its content before
     // leaving holes
-    const DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(), std::cbrtf(MaxBatchSize)};
+    dynamicConst_ = {pointCloudAcceleration_->GetBatchCount(), std::cbrtf(MaxBatchSize),
+                     WarpWideDeduplicationSetting::None};
 
-    tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst)};
+    tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst_)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);
     const tga::BufferInfo info{tga::BufferUsage::uniform, sizeof(DynamicConst), staging};
-    dynamicConst_ = backend_.createBuffer(info);
+    dynamicConstBuffer_ = backend_.createBuffer(info);
 
     backend_.free(staging);
 }
@@ -324,7 +341,7 @@ void VPCRImpl::CreateClearPass()
         clearPass = std::make_unique<TGAComputePass>(backend_, passInfo);
 
         clearPass->BindInput(camera_->GetBuffer(), 0, 0);
-        clearPass->BindInput(dynamicConst_, 0, 1);
+        clearPass->BindInput(dynamicConstBuffer_, 0, 1);
         clearPass->BindInput(pipeline.renderTarget, 1, 0);
         clearPass->BindInput(pipeline.depthBuffer, 1, 1);
     }
@@ -346,7 +363,7 @@ void VPCRImpl::CreateLODPass()
         lodPass = std::make_unique<TGAComputePass>(backend_, passInfo);
 
         lodPass->BindInput(camera_->GetBuffer(), 0, 0);
-        lodPass->BindInput(dynamicConst_, 0, 1);
+        lodPass->BindInput(dynamicConstBuffer_, 0, 1);
         lodPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 1, 0);
         lodPass->BindInput(pipeline.batchList, 1, 1);
     }
@@ -360,7 +377,7 @@ void VPCRImpl::CreateProjectionPass()
         // Use utility function to load Shader from File
         const auto computeShader =
             tga::loadShader("../shaders/projection_comp.spv", tga::ShaderType::compute, backend_);
-
+        
         const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
                                             {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
                                             // Set = 1: Rendertarget, Depthbuffer
@@ -380,7 +397,7 @@ void VPCRImpl::CreateProjectionPass()
         projectionPass = std::make_unique<TGAComputePass>(backend_, passInfo);
 
         projectionPass->BindInput(camera_->GetBuffer(), 0, 0);
-        projectionPass->BindInput(dynamicConst_, 0, 1);
+        projectionPass->BindInput(dynamicConstBuffer_, 0, 1);
         projectionPass->BindInput(pipeline.renderTarget, 1, 0);
         projectionPass->BindInput(pipeline.depthBuffer, 1, 1);
 
