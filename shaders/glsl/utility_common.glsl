@@ -25,10 +25,20 @@ struct Bucket{
     uint64_t acc;
 };
 
+#define BUCKET_COUNT_OPDAA 100
 struct Histogram{
     int startIdx;
     uint bucketCount;
-    Bucket buckets[100];   // maximal 100 filled buckets per pixel
+    Bucket buckets[BUCKET_COUNT_OPDAA];   // maximal 100 filled buckets per pixel
+};
+
+struct BucketTP{
+    uint64_t acc;
+};
+
+#define BUCKET_COUNT_TPDAA 5
+struct HistogramTP{
+    BucketTP buckets[BUCKET_COUNT_TPDAA];   // maximal 5 division of depth of world-space pixel
 };
 
 uint getPixelID(const uvec2 resolution, const uvec2 pixelCoord){

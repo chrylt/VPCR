@@ -11,14 +11,16 @@ layout(set = 0, binding = 0) uniform Camera{
     vec3 direction;
     vec3 position;
     uvec2 resolution;
+    float nearFarDistance;
+    float fovY;
 }camera;
 
 layout(set = 0, binding = 1) uniform DynamicConst{
     uint workerCount;
 };
 
-layout(set = 1, binding = 0) buffer RENDER_TARGET{
-    uint64_t renderTarget[];
+layout(set = 1, binding = 0) buffer HistogramPerPixel{
+    HistogramTP histogram[];
 };
 
 layout(set = 1, binding = 1, r32ui) uniform uimage2D depthBuffer;
@@ -43,6 +45,14 @@ layout(set = 4, binding = 0) writeonly buffer Statistics{
 };
 
 layout(local_size_x = 1024) in;
+
+float getPixelSizeInWorldSpace(const float depth){
+    return 2 * depth * tan(camera.fovY / 2) / camera.resolution.y;
+}
+
+uint getBucketID(const float storedDepth, const float pixelSizeInWorldSpace, const float depth){
+    return uint((depth - storedDepth) / pixelSizeInWorldSpace * BUCKET_COUNT_TPDAA);
+}
 
 void main(){
     drawnBatches = batchCount;
@@ -72,22 +82,27 @@ void main(){
             // projection is within window
             const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
 
-            // compare depth now as float
+            // construct histogram
+            const float storedDepth = uintBitsToFloat(imageLoad(depthBuffer, ivec2(coords)).x);
+            const float pixelSizeInWorldSpace = getPixelSizeInWorldSpace(storedDepth);
+
             const float depth = projected.w;
 
-            const float storedDepth = uintBitsToFloat(imageLoad(depthBuffer, ivec2(coords)).x);
+            if(depth <= (storedDepth + pixelSizeInWorldSpace)){
+                // depth should be added to histogram bucket
+                const uint bucketID = getBucketID(storedDepth, pixelSizeInWorldSpace, depth);
+                const uint pixelID = getPixelID(camera.resolution, uvec2(coords));
 
-            if(depth <= storedDepth * 1.0001){
-                // store 32-bit color to 64-bit variable to avoid overflow
-                // add 8 more bit to each channel
-                // alpha channel is used as a counter
+                /// store 32-bit color to 64-bit variable to avoid overflow
+                /// add 8 more bit to each channel
+                /// alpha channel is used as a counter
                 uint rgba = pointsRgba[k];
                 uint r = (rgba & 0xFF);
                 uint g = (rgba >> 8) & 0xFF;
                 uint b = (rgba >> 16) & 0xFF;
                 uint64_t rgba64 = (uint64_t(r) << 48) | (uint64_t(g) << 32) | (uint64_t(b) << 16) | 1;
 
-	            atomicAdd(renderTarget[getPixelID(camera.resolution, uvec2(coords))], rgba64);
+	            atomicAdd(histogram[pixelID].buckets[bucketID].acc, rgba64);
             }
         }
     }

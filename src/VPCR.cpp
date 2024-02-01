@@ -64,6 +64,20 @@ private:
         tga::CommandBuffer commandBuffer;
     };
 
+    struct PipelineTwoPassDensityAntiAliasing {
+        tga::Buffer batchList;
+        tga::Buffer statistics;
+        tga::StagingBuffer statisticsDownload;
+        tga::Buffer renderTarget;
+        tga::Texture depthBuffer;
+        std::unique_ptr<TGAComputePass> clearPass;
+        std::unique_ptr<TGAComputePass> lodPass;
+        std::unique_ptr<TGAComputePass> projectionDepthPass;
+        std::unique_ptr<TGAComputePass> projectionHistogramPass;
+        std::unique_ptr<TGAQuadPass> displayPass;
+        tga::CommandBuffer commandBuffer;
+    };
+
     struct DynamicConst {
         // Misc information we need on gpu
         std::uint32_t totalBatchCount;
@@ -75,34 +89,41 @@ private:
         std::uint32_t drawnBatches;
     };
 
-    enum AntiAliasingMode { kOff, kTwoPass, kDensityOnePass, AA_MODE_COUNT /* always keep this as the last element */ };
-    const char *AntiAliasingModeStrings[3] = {"OFF", "TWO PASS", "DENSITY"};
+    enum AntiAliasingMode { kOff, kTwoPass, kDensityOnePass, kDensityTwoPass, AA_MODE_COUNT /* always keep this as the last element */ };
+    const char *AntiAliasingModeStrings[AA_MODE_COUNT] = {"OFF", "TWO PASS", "DENSITY ONE PASS", "DENSITY TWO PASS"};
 
     void OnUpdate(std::uint32_t frameIndex);
     void OnRender(std::uint32_t frameIndex);
     void OnRenderTPAA(std::uint32_t frameIndex);
     void OnRenderOPDAA(std::uint32_t frameIndex);
+    void OnRenderTPDAA(std::uint32_t frameIndex);
 
     void CreateDynamicConst();
     void CreateBatchList();
     void CreateRenderTarget();
     void CreateRenderTargetTPAA();
+    void CreateRenderTargetTPDAA();
     void CreateDepthBuffer();
     void CreateDepthBufferTPAA();
     void CreateDepthBufferOPDAA();
+    void CreateDepthBufferTPDAA();
     void CreateStatisticsReadbackBuffer();
 
     void CreateClearPass();
     void CreateClearPassTPAA();
     void CreateClearPassOPDAA();
+    void CreateClearPassTPDAA();
     void CreateLODPass();
     void CreateProjectionPass();
     void CreateProjectionPassDepthTPAA();
     void CreateProjectionPassColorTPAA();
     void CreateProjectionPassOPDAA();
+    void CreateProjectionPassDepthTPDAA();
+    void CreateProjectionPassHistogramTPDAA();
     void CreateDisplayPass();
     void CreateDisplayPassTPAA();
     void CreateDisplayPassOPDAA();
+    void CreateDisplayPassTPDAA();
 
     Config config_;
     tga::Interface backend_;
@@ -124,9 +145,9 @@ private:
     std::vector<Pipeline> pipelines_;
     std::vector<PipelineTwoPassAntiAliasing> pipelinesTPAA_;
     std::vector<PipelineOnePassDensityAntiAliasing> pipelinesOPDAA_;
+    std::vector<PipelineTwoPassDensityAntiAliasing> pipelinesTPDAA_;
 
     std::unique_ptr<TGAPointCloudAcceleration> pointCloudAcceleration_;
-
 };
 
 }  // namespace
@@ -153,6 +174,7 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     pipelines_.resize(backend_.backbufferCount(window_));
     pipelinesTPAA_.resize(backend_.backbufferCount(window_));
     pipelinesOPDAA_.resize(backend_.backbufferCount(window_));
+    pipelinesTPDAA_.resize(backend_.backbufferCount(window_));
 
     // Create Resources
     pointCloudAcceleration_ = std::make_unique<TGAPointCloudAcceleration>(backend_, scenePath.value());
@@ -161,23 +183,29 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     CreateBatchList();
     CreateRenderTarget();
     CreateRenderTargetTPAA();
+    CreateRenderTargetTPDAA();
     CreateDepthBuffer();
     CreateDepthBufferTPAA();
     CreateDepthBufferOPDAA();
+    CreateDepthBufferTPDAA();
     CreateStatisticsReadbackBuffer();
 
     // Create Passes
     CreateClearPass();
     CreateClearPassTPAA();
     CreateClearPassOPDAA();
+    CreateClearPassTPDAA();
     CreateLODPass();
     CreateProjectionPass();
     CreateProjectionPassDepthTPAA();
     CreateProjectionPassColorTPAA();
     CreateProjectionPassOPDAA();
+    CreateProjectionPassDepthTPDAA();
+    CreateProjectionPassHistogramTPDAA();
     CreateDisplayPass();
     CreateDisplayPassTPAA();
     CreateDisplayPassOPDAA();
+    CreateDisplayPassTPDAA();
 }
 
 void VPCRImpl::Run()
@@ -191,6 +219,7 @@ void VPCRImpl::Run()
             case kOff: OnRender(nextFrame); break;
             case kTwoPass: OnRenderTPAA(nextFrame); break;
             case kDensityOnePass: OnRenderOPDAA(nextFrame); break;
+            case kDensityTwoPass: OnRenderTPDAA(nextFrame); break;
             default: OnRender(nextFrame);
         }
     }
@@ -206,7 +235,6 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
 
     // Toggle Features bases on user input
     {
-
         static auto start = std::chrono::high_resolution_clock::now();
         constexpr auto keyPressSpacing = std::chrono::seconds(1);
 
@@ -411,15 +439,57 @@ void VPCRImpl::OnRenderOPDAA(std::uint32_t frameIndex)
     config_.Set("ShouldClose", backend_.windowShouldClose(window_));
 }
 
+void VPCRImpl::OnRenderTPDAA(std::uint32_t frameIndex)
+{
+    auto& commandBuffer = pipelinesTPDAA_[frameIndex].commandBuffer;
+    const auto& clearPass = pipelinesTPDAA_[frameIndex].clearPass;
+    const auto& lodPass = pipelinesTPDAA_[frameIndex].lodPass;
+    const auto& projectionDepthPass = pipelinesTPDAA_[frameIndex].projectionDepthPass;
+    const auto& projectionHistogramPass = pipelinesTPDAA_[frameIndex].projectionHistogramPass;
+    const auto& displayPass = pipelinesTPDAA_[frameIndex].displayPass;
+
+    auto commandRecorder = tga::CommandRecorder{backend_, commandBuffer};
+
+    // Readback
+    commandRecorder.bufferDownload(pipelinesTPDAA_[frameIndex].statistics, pipelinesTPDAA_[frameIndex].statisticsDownload,
+                                   sizeof(Statistics));
+
+    // Upload
+    camera_->Upload(commandRecorder);
+    // Set the batch count to 0 as the LOD pass will determine the batches to be rendered
+    constexpr std::uint32_t zero = 0;
+    commandRecorder.inlineBufferUpdate(pipelinesTPDAA_[frameIndex].batchList, &zero, sizeof(zero));
+    commandRecorder.barrier(tga::PipelineStage::Transfer, tga::PipelineStage::ComputeShader);
+
+    // Collect Execution Commands
+    const auto res = config_.Get<std::vector<std::uint32_t>>("resolution").value();
+    const auto batchCount = pointCloudAcceleration_->GetBatchCount();
+    clearPass->Execute(commandRecorder, res[0] / ComputeLaneCount + 1, res[1]);
+    lodPass->Execute(commandRecorder, batchCount);
+    commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
+    projectionDepthPass->Execute(commandRecorder, batchCount);
+    commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
+    projectionHistogramPass->Execute(commandRecorder, batchCount);
+    commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::FragmentShader);
+    displayPass->Execute(commandRecorder, frameIndex);
+
+    // Execute
+    commandBuffer = commandRecorder.endRecording();
+    backend_.execute(commandBuffer);
+
+    // Present
+    backend_.present(window_, frameIndex);
+
+    config_.Set("ShouldClose", backend_.windowShouldClose(window_));
+}
+
 void VPCRImpl::CreateDynamicConst()
 {
     // We are using the cubic root of the MaxBatchSize as a heuristic for the size of a batch before it loses precision
     // Generally we would like to know the area in pixels of a projected batch that can be coverd by its content before
     // leaving holes
     constexpr float depthStepSize = (1000.0f / static_cast<float>(std::numeric_limits<int>::max())) * 10'000;
-    const DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(),
-                                    depthStepSize,
-                                    std::cbrtf(MaxBatchSize)};
+    const DynamicConst dynamicConst{pointCloudAcceleration_->GetBatchCount(), depthStepSize, std::cbrtf(MaxBatchSize)};
 
     tga::StagingBufferInfo stagingInfo{sizeof(DynamicConst), reinterpret_cast<const std::uint8_t *>(&dynamicConst)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);
@@ -479,6 +549,21 @@ void VPCRImpl::CreateBatchList()
 
         backend_.free(staging);
     }
+    for (auto& pipeline : pipelinesTPDAA_) {
+        std::vector<std::uint32_t> batchList(batchCount + 1);
+        batchList[0] = batchCount;
+        for (std::uint32_t i = 0; i < batchCount; ++i) {
+            batchList[i + 1] = i;
+        }
+
+        tga::StagingBufferInfo stagingInfo{(batchCount + 1) * sizeof(std::uint32_t),
+                                           reinterpret_cast<const std::uint8_t *>(batchList.data())};
+        const auto staging = backend_.createStagingBuffer(stagingInfo);
+        const tga::BufferInfo info{tga::BufferUsage::storage, (batchCount + 1) * sizeof(std::uint32_t), staging};
+        pipeline.batchList = backend_.createBuffer(info);
+
+        backend_.free(staging);
+    }
 }
 
 void VPCRImpl::CreateRenderTarget()
@@ -497,6 +582,17 @@ void VPCRImpl::CreateRenderTargetTPAA()
         const glm::vec2 resolution = camera_->GetResolution();
         const tga::BufferInfo info{tga::BufferUsage::storage,
                                    static_cast<size_t>(resolution.x * resolution.y) * sizeof(std::uint64_t)};
+        pipeline.renderTarget = backend_.createBuffer(info);
+    }
+}
+
+void VPCRImpl::CreateRenderTargetTPDAA()
+{
+    const auto res = config_.Get<std::vector<std::uint32_t>>("resolution").value();
+    for (auto& pipeline : pipelinesTPDAA_) {
+        const glm::vec2 resolution = camera_->GetResolution();
+        const tga::BufferInfo info{tga::BufferUsage::storage,
+                                   static_cast<size_t>(resolution.x * resolution.y) * sizeof(HistogramTP)};
         pipeline.renderTarget = backend_.createBuffer(info);
     }
 }
@@ -530,6 +626,15 @@ void VPCRImpl::CreateDepthBufferOPDAA()
     }
 }
 
+void VPCRImpl::CreateDepthBufferTPDAA()
+{
+    const auto res = config_.Get<std::vector<std::uint32_t>>("resolution").value();
+    for (auto& pipeline : pipelinesTPDAA_) {
+        const tga::TextureInfo textureInfo(res[0], res[1], tga::Format::r32_uint);
+        pipeline.depthBuffer = backend_.createTexture(textureInfo);
+    }
+}
+
 void VPCRImpl::CreateStatisticsReadbackBuffer()
 {
     for (auto& pipeline : pipelines_) {
@@ -545,6 +650,12 @@ void VPCRImpl::CreateStatisticsReadbackBuffer()
         pipeline.statistics = backend_.createBuffer(info);
     }
     for (auto& pipeline : pipelinesOPDAA_) {
+        tga::StagingBufferInfo stagingInfo{sizeof(Statistics)};
+        pipeline.statisticsDownload = backend_.createStagingBuffer(stagingInfo);
+        const tga::BufferInfo info{tga::BufferUsage::storage, sizeof(Statistics), pipeline.statisticsDownload};
+        pipeline.statistics = backend_.createBuffer(info);
+    }
+    for (auto& pipeline : pipelinesTPDAA_) {
         tga::StagingBufferInfo stagingInfo{sizeof(Statistics)};
         pipeline.statisticsDownload = backend_.createStagingBuffer(stagingInfo);
         const tga::BufferInfo info{tga::BufferUsage::storage, sizeof(Statistics), pipeline.statisticsDownload};
@@ -621,6 +732,29 @@ void VPCRImpl::CreateClearPassOPDAA()
     }
 }
 
+void VPCRImpl::CreateClearPassTPDAA()
+{
+    for (auto& pipeline : pipelinesTPDAA_) {
+        auto& clearPass = pipeline.clearPass;
+
+        // Use utility function to load Shader from File
+        const auto computeShader = tga::loadShader("../shaders/clearTPDAA_comp.spv", tga::ShaderType::compute, backend_);
+
+        const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
+                                            {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
+                                            // Set = 1: RenderTarget, DepthBuffer
+                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageImage}}}});
+
+        const tga::ComputePassInfo passInfo(computeShader, inputLayout);
+        clearPass = std::make_unique<TGAComputePass>(backend_, passInfo);
+
+        clearPass->BindInput(camera_->GetBuffer(), 0, 0);
+        clearPass->BindInput(dynamicConst_, 0, 1);
+        clearPass->BindInput(pipeline.renderTarget, 1, 0);
+        clearPass->BindInput(pipeline.depthBuffer, 1, 1);
+    }
+}
+
 void VPCRImpl::CreateLODPass()
 {
     for (auto& pipeline : pipelines_) {
@@ -660,6 +794,24 @@ void VPCRImpl::CreateLODPass()
         lodPass->BindInput(pipeline.batchList, 1, 1);
     }
     for (auto& pipeline : pipelinesOPDAA_) {
+        auto& lodPass = pipeline.lodPass;
+
+        const auto computeShader = tga::loadShader("../shaders/lod_comp.spv", tga::ShaderType::compute, backend_);
+
+        const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
+                                            {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
+                                            // Set = 1: Batches, Batch List
+                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}}});
+
+        const tga::ComputePassInfo passInfo(computeShader, inputLayout);
+        lodPass = std::make_unique<TGAComputePass>(backend_, passInfo);
+
+        lodPass->BindInput(camera_->GetBuffer(), 0, 0);
+        lodPass->BindInput(dynamicConst_, 0, 1);
+        lodPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 1, 0);
+        lodPass->BindInput(pipeline.batchList, 1, 1);
+    }
+    for (auto& pipeline : pipelinesTPDAA_) {
         auto& lodPass = pipeline.lodPass;
 
         const auto computeShader = tga::loadShader("../shaders/lod_comp.spv", tga::ShaderType::compute, backend_);
@@ -858,6 +1010,96 @@ void VPCRImpl::CreateProjectionPassOPDAA()
     }
 }
 
+void VPCRImpl::CreateProjectionPassDepthTPDAA()
+{
+    for (auto& pipeline : pipelinesTPDAA_) {
+        auto& projectionDepthPass = pipeline.projectionDepthPass;
+
+        // Use utility function to load Shader from File
+        const auto computeShader =
+            tga::loadShader("../shaders/projectionDepthTPDAA_comp.spv", tga::ShaderType::compute, backend_);
+
+        const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
+                                            {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
+                                            // Set = 1: Rendertarget, Depthbuffer
+                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageImage}}},
+                                            // Set = 2: PointsPositionLowPrecision, PointsPositionMediumPrecision,
+                                            // PointsPositionHighPrecision, PointsColor
+                                            {{{tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer}}},
+                                            // Set = 3: Batches, Batch list
+                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}},
+                                            // Set = 4: Statistics
+                                            {{{tga::BindingType::storageBuffer}}}});
+
+        const tga::ComputePassInfo passInfo(computeShader, inputLayout);
+        projectionDepthPass = std::make_unique<TGAComputePass>(backend_, passInfo);
+
+        projectionDepthPass->BindInput(camera_->GetBuffer(), 0, 0);
+        projectionDepthPass->BindInput(dynamicConst_, 0, 1);
+        projectionDepthPass->BindInput(pipeline.renderTarget, 1, 0);
+        projectionDepthPass->BindInput(pipeline.depthBuffer, 1, 1);
+
+        // Point information buffers
+        const auto& pointsBufferPack = pointCloudAcceleration_->GetPointsBufferPack();
+        projectionDepthPass->BindInput(pointsBufferPack.positionLowPrecision, 2, 0);
+        projectionDepthPass->BindInput(pointsBufferPack.positionMediumPrecision, 2, 1);
+        projectionDepthPass->BindInput(pointsBufferPack.positionHighPrecision, 2, 2);
+        projectionDepthPass->BindInput(pointsBufferPack.colors, 2, 3);
+
+        projectionDepthPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 3, 0);
+        projectionDepthPass->BindInput(pipeline.batchList, 3, 1);
+        projectionDepthPass->BindInput(pipeline.statistics, 4, 0);
+    }
+}
+
+void VPCRImpl::CreateProjectionPassHistogramTPDAA()
+{
+    for (auto& pipeline : pipelinesTPDAA_) {
+        auto& projectionHistogramPass = pipeline.projectionHistogramPass;
+
+        // Use utility function to load Shader from File
+        const auto computeShader =
+            tga::loadShader("../shaders/projectionHistogramTPDAA_comp.spv", tga::ShaderType::compute, backend_);
+
+        const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
+                                            {{{tga::BindingType::uniformBuffer}, {tga::BindingType::uniformBuffer}}},
+                                            // Set = 1: Rendertarget, Depthbuffer
+                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageImage}}},
+                                            // Set = 2: PointsPositionLowPrecision, PointsPositionMediumPrecision,
+                                            // PointsPositionHighPrecision, PointsColor
+                                            {{{tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer},
+                                              {tga::BindingType::storageBuffer}}},
+                                            // Set = 3: Batches, Batch list
+                                            {{{tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}}},
+                                            // Set = 4: Statistics
+                                            {{{tga::BindingType::storageBuffer}}}});
+
+        const tga::ComputePassInfo passInfo(computeShader, inputLayout);
+        projectionHistogramPass = std::make_unique<TGAComputePass>(backend_, passInfo);
+
+        projectionHistogramPass->BindInput(camera_->GetBuffer(), 0, 0);
+        projectionHistogramPass->BindInput(dynamicConst_, 0, 1);
+        projectionHistogramPass->BindInput(pipeline.renderTarget, 1, 0);
+        projectionHistogramPass->BindInput(pipeline.depthBuffer, 1, 1);
+
+        // Point information buffers
+        const auto& pointsBufferPack = pointCloudAcceleration_->GetPointsBufferPack();
+        projectionHistogramPass->BindInput(pointsBufferPack.positionLowPrecision, 2, 0);
+        projectionHistogramPass->BindInput(pointsBufferPack.positionMediumPrecision, 2, 1);
+        projectionHistogramPass->BindInput(pointsBufferPack.positionHighPrecision, 2, 2);
+        projectionHistogramPass->BindInput(pointsBufferPack.colors, 2, 3);
+
+        projectionHistogramPass->BindInput(pointCloudAcceleration_->GetBatchesBuffer(), 3, 0);
+        projectionHistogramPass->BindInput(pipeline.batchList, 3, 1);
+        projectionHistogramPass->BindInput(pipeline.statistics, 4, 0);
+    }
+}
+
 void VPCRImpl::CreateDisplayPass()
 {
     for (auto& pipeline : pipelines_) {
@@ -919,7 +1161,7 @@ void VPCRImpl::CreateDisplayPassOPDAA()
 
         const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
                                             {{{tga::BindingType::uniformBuffer}}},
-                                            // Set = 1: RenderTarget
+                                            // Set = 1: Histogram
                                             {{{tga::BindingType::storageBuffer}}}});
 
         const tga::RenderPassInfo passInfo(vertexShader, fragmentShader, window_, {}, inputLayout,
@@ -931,6 +1173,31 @@ void VPCRImpl::CreateDisplayPassOPDAA()
     }
 }
 
+void VPCRImpl::CreateDisplayPassTPDAA()
+{
+    for (auto& pipeline : pipelinesTPDAA_) {
+        auto& displayPass = pipeline.displayPass;
+
+        // Use utility function to load Shader from File
+        const auto vertexShader =
+            tga::loadShader("../shaders/fullScreenTriangle_vert.spv", tga::ShaderType::vertex, backend_);
+        const auto fragmentShader =
+            tga::loadShader("../shaders/renderTargetTPDAA_frag.spv", tga::ShaderType::fragment, backend_);
+
+        const tga::InputLayout inputLayout({// Set = 0: Camera, DynamicConst
+                                            {{{tga::BindingType::uniformBuffer}}},
+                                            // Set = 1: Histogram
+                                            {{{tga::BindingType::storageBuffer}, tga::BindingType::storageImage}}});
+
+        const tga::RenderPassInfo passInfo(vertexShader, fragmentShader, window_, {}, inputLayout,
+                                           tga::ClearOperation::none);
+        displayPass = std::make_unique<TGAQuadPass>(backend_, passInfo);
+
+        displayPass->BindInput(camera_->GetBuffer(), 0, 0);
+        displayPass->BindInput(pipeline.renderTarget, 1);
+        displayPass->BindInput(pipeline.depthBuffer, 1, 1);
+    }
+}
 }  // namespace
 
 std::unique_ptr<VPCR> CreateVPCR(Config config) { return std::make_unique<VPCRImpl>(std::move(config)); }
