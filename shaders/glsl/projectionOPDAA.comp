@@ -2,45 +2,15 @@
 #extension GL_ARB_gpu_shader_int64 : enable
 #extension GL_KHR_vulkan_glsl : enable
 #extension GL_EXT_shader_atomic_int64 : enable
-#include "utility_common.glsl"
-#include "vertex_precision_common.glsl"
-
-layout(set = 0, binding = 0) uniform Camera{
-    mat4 view;
-    mat4 projection;
-    vec3 direction;
-    vec3 position;
-    uvec2 resolution;
-    uvec2 padding;
-    float nearFarDistance;
-}camera;
-
-layout(set = 0, binding = 1) uniform DynamicConst{
-    uint workerCount;
-    float depthStepSize;
-};
+#include "common.glsl"
 
 layout(set = 1, binding = 0) buffer DEPTH_BUFFER{ 
     Histogram depthBuffer[];
 };
 
-// Vertex Precision Buffers are in vertex_precision_common file
-
-layout(set = 2, binding = 3) buffer Points_Color{
-    uint pointsRgba[];
-};
-
-layout(set = 3, binding = 0) readonly buffer BatchNodes{
-    Node nodes[];  
-};
-
-layout(set = 3, binding = 1) readonly buffer BatchList{
+layout(set = 2, binding = 0) readonly buffer BatchList{
     uint batchCount;
     uint batchList[];
-};
-
-layout(set = 4, binding = 0) writeonly buffer Statistics{
-    uint drawnBatches;
 };
 
 layout(local_size_x = 1024) in;

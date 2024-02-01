@@ -4,7 +4,9 @@
 #include <tga/tga_utils.hpp>
 #include <tga/tga_vulkan/tga_vulkan.hpp>
 
-class TGACamera {
+#include "IPipeline.h"
+
+class TGACamera : public IPipeline::UploadData {
 public:
     struct Camera {
         alignas(16) glm::mat4 view = glm::mat4(1);
@@ -20,7 +22,7 @@ public:
 
     void Update(glm::vec3 position, float jaw, float pitch);
 
-    tga::CommandRecorder& Upload(tga::CommandRecorder& recorder) const;
+    tga::CommandRecorder& Upload(tga::CommandRecorder& recorder) const override;
 
     tga::Buffer GetBuffer();
 
