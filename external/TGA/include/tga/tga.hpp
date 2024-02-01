@@ -142,7 +142,7 @@ private:
     void guiStartFrame();
     void guiEndFrame(CommandBuffer cmdBuffer);
 
-public:
+private:
     struct InternalState;
     std::unique_ptr<InternalState> state;
 };
@@ -264,7 +264,7 @@ public:
         return *this;
     }
 
-public:
+private:
     Interface& tgai;
     CommandBuffer cmdBuffer;
 };
