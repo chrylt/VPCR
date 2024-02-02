@@ -1,6 +1,18 @@
-[submodule "external/TGA"]
-	path = external/TGA
-	url = https://github.com/Estard/TGA
 [submodule "external/TGLTF/tinygltf"]
 	path = external/TGLTF/tinygltf
 	url = https://github.com/syoyo/tinygltf
+[submodule "external/TGA_Custom/external/imgui"]
+	path = external/TGA_Custom/external/imgui
+	url = https://github.com/ocornut/imgui
+[submodule "external/TGA_Custom/external/glfw"]
+	path = external/TGA_Custom/external/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "external/TGA_Custom/external/glm"]
+	path = external/TGA_Custom/external/glm
+	url = https://github.com/g-truc/glm.git
+[submodule "external/TGA_Custom/external/stb"]
+	path = external/TGA_Custom/external/stb
+	url = https://github.com/nothings/stb.git
+[submodule "external/TGA_Custom/external/tinyobjloader"]
+	path = external/TGA_Custom/external/tinyobjloader
+	url = https://github.com/tinyobjloader/tinyobjloader.git
