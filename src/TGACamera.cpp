@@ -51,7 +51,6 @@ tga::Buffer TGACamera::GetBuffer() { return buffer_; }
 
 glm::vec3 TGACamera::GetPosition() const { return position_; }
 glm::vec3 TGACamera::GetDirection() const { return direction_; }
-glm::uvec2 TGACamera::GetResolution() const { return cam_.resolution; }
 float TGACamera::GetJaw() const { return jaw_; }
 float TGACamera::GetPitch() const { return pitch_; }
 

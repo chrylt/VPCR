@@ -28,7 +28,6 @@ public:
 
     glm::vec3 GetPosition() const;
     glm::vec3 GetDirection() const;
-    glm::uvec2 GetResolution() const;
     float GetJaw() const;
     float GetPitch() const;
 
