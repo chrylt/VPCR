@@ -1,15 +1,7 @@
 #version 460
-#extension GL_KHR_vulkan_glsl : enable
 #extension GL_ARB_gpu_shader_int64 : enable
-#include "utility_common.glsl"
-
-layout(set = 0, binding = 0) uniform Camera{
-    mat4 view;
-    mat4 projection;
-    vec3 direction;
-    vec3 position;
-    uvec2 resolution;
-}camera;
+#extension GL_KHR_vulkan_glsl : enable
+#include "common.glsl"
 
 layout(set = 1, binding = 0) buffer DEPTH_BUFFER{ 
     Histogram depthBuffer[];
@@ -19,7 +11,7 @@ layout(location = 0) out vec4 color;
 
 void main()
 {
-    uint pixelID = getPixelID(camera.resolution, uvec2(gl_FragCoord.xy));
+    const uint pixelID = getPixelID(camera.resolution, uvec2(gl_FragCoord.xy));
 
     float counter = 0;
     float r = 0;
@@ -33,17 +25,17 @@ void main()
 
     bool foundMax = false;
     bool overflowDetected = false;
-    uint TIMEOUT = 1;
+    const uint TIMEOUT = 1;
     uint timeoutCounter = 0;
     while(!foundMax && currIdx != -1 && !overflowDetected && timeoutCounter < TIMEOUT){
         timeoutCounter += 1;
 
         // unpack bucket values
         const uint64_t storedValue = depthBuffer[pixelID].buckets[currIdx].acc;
-        float bucketCounter = float(storedValue & 0xFFFF);
-        float bucketR = float((storedValue >> 48) & 0xFFFF);
-        float bucketG = float((storedValue >> 32) & 0xFFFF);
-        float bucketB = float((storedValue >> 16) & 0xFFFF);
+        const float bucketCounter = float(storedValue & 0xFFFF);
+        const float bucketR = float((storedValue >> 48) & 0xFFFF);
+        const float bucketG = float((storedValue >> 32) & 0xFFFF);
+        const float bucketB = float((storedValue >> 16) & 0xFFFF);
 
         if(prevIdx != -1 && (depthBuffer[pixelID].buckets[currIdx].bucketID < depthBuffer[pixelID].buckets[prevIdx].bucketID - 1 
             || bucketCounter < prevBucketCounter)){

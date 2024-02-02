@@ -5,14 +5,12 @@ TGACamera::TGACamera(tga::Interface& tgai, const std::uint32_t resX, const std::
     : backend_(tgai), jaw_(jaw), pitch_(pitch), position_(position), up_(up)
 {
     cam_.resolution = glm::uvec2(resX, resY);
-    constexpr float nearPlane = 0.1;
+    constexpr float nearPlane = 0.1f;
     constexpr float farPlane = 1000.f;
-    cam_.fovY = glm::radians(70.f);
-    cam_.projection =
-        glm::perspective_vk(cam_.fovY, static_cast<float>(resX) / static_cast<float>(resY),
+    cam_.fovY = 70.f;
+    cam_.projection = glm::perspective_vk(glm::radians(cam_.fovY), static_cast<float>(resX) / static_cast<float>(resY),
                                           nearPlane, farPlane);
     cam_.nearFarDistance = farPlane - nearPlane;
-    
 
     const tga::StagingBufferInfo stagingCameraInfo(sizeof(Camera));
     staging_ = backend_.createStagingBuffer(stagingCameraInfo);
@@ -54,7 +52,6 @@ tga::Buffer TGACamera::GetBuffer() { return buffer_; }
 
 glm::vec3 TGACamera::GetPosition() const { return position_; }
 glm::vec3 TGACamera::GetDirection() const { return direction_; }
-glm::uvec2 TGACamera::GetResolution() const { return cam_.resolution; }
 float TGACamera::GetJaw() const { return jaw_; }
 float TGACamera::GetPitch() const { return pitch_; }
 

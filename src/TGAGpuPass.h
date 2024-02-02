@@ -5,19 +5,25 @@
 #include <tga/tga_utils.hpp>
 #include <tga/tga_vulkan/tga_vulkan.hpp>
 
+struct BindingInfo {
+    std::variant<tga::Buffer, tga::Texture, tga::ext::TopLevelAccelerationStructure> resource;
+    std::uint32_t set;
+    std::uint32_t slot = 0;
+    std::uint32_t arrayIndex = 0;
+    std::uint32_t swapIndex = 0;
+};
+
 class TGAGpuPass {
 public:
-    void BindInput(std::variant<tga::Buffer, tga::Texture, tga::ext::TopLevelAccelerationStructure> resource,
-                   std::uint32_t set, std::uint32_t slot = 0, std::uint32_t arrayIndex = 0,
-                   std::uint32_t swapIndex = 0);
+    void BindInput(const BindingInfo& binding);
 
     virtual ~TGAGpuPass();
 
 protected:
-    TGAGpuPass(tga::Interface &tgai, std::uint32_t swapCount);
+    TGAGpuPass(tga::Interface& tgai, std::uint32_t swapCount);
     void Init();
 
-    tga::Interface &backend_;
+    tga::Interface& backend_;
 
     std::vector<std::vector<tga::InputSetInfo>> inputInfos_;
     std::vector<std::vector<tga::InputSet>> inputs_;
@@ -28,7 +34,7 @@ protected:
 
 class TGARenderPass final : public TGAGpuPass {
 public:
-    TGARenderPass(tga::Interface &tgai, const tga::RenderPassInfo& info, std::uint32_t swapCount = 1);
+    TGARenderPass(tga::Interface& tgai, const tga::RenderPassInfo& info, std::uint32_t swapCount = 1);
 
     void BindIndexBuffer(tga::Buffer indices);
     void BindVertexBuffer(tga::Buffer vertices);
@@ -49,7 +55,7 @@ private:
 
 class TGAQuadPass final : public TGAGpuPass {
 public:
-    TGAQuadPass(tga::Interface &tgai, const tga::RenderPassInfo& info, std::uint32_t swapCount = 1);
+    TGAQuadPass(tga::Interface& tgai, const tga::RenderPassInfo& info, std::uint32_t swapCount = 1);
 
     tga::CommandRecorder& Execute(tga::CommandRecorder& recorder, std::uint32_t frameIndex = 0);
 
@@ -61,7 +67,7 @@ private:
 
 class TGAComputePass final : public TGAGpuPass {
 public:
-    TGAComputePass(tga::Interface &tgai, const tga::ComputePassInfo& info, std::uint32_t swapCount = 1);
+    TGAComputePass(tga::Interface& tgai, const tga::ComputePassInfo& info, std::uint32_t swapCount = 1);
 
     tga::CommandRecorder& Execute(tga::CommandRecorder& recorder, std::uint32_t dispatchSizeX,
                                   std::uint32_t dispatchSizeY = 1, std::uint32_t dispatchSizeZ = 1);
