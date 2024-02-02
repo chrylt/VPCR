@@ -281,7 +281,7 @@ VPCRImpl::DynamicConstBuffer::DynamicConstBuffer(tga::Interface& backend, const 
     constexpr float depthStepSize = (1000.0f / static_cast<float>(std::numeric_limits<int>::max())) * 10'000;
     data = {batchCount, depthStepSize, std::cbrtf(MaxBatchSize)};
 
-    tga::StagingBufferInfo stagingInfo{sizeof(data), reinterpret_cast<const std::uint8_t *>(&data)};
+    const tga::StagingBufferInfo stagingInfo{sizeof(data), reinterpret_cast<const std::uint8_t *>(&data)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);
     const tga::BufferInfo info{tga::BufferUsage::uniform, sizeof(DynamicConst), staging};
     buffer_ = backend_.createBuffer(info);
@@ -299,7 +299,7 @@ tga::Buffer VPCRImpl::DynamicConstBuffer::GetBuffer() const { return buffer_; }
 
 VPCRImpl::StatisticsBuffer::StatisticsBuffer(tga::Interface& backend) : backend_(backend)
 {
-    tga::StagingBufferInfo stagingInfo{sizeof(Statistics)};
+    const tga::StagingBufferInfo stagingInfo{sizeof(Statistics)};
     stagingBuffer_ = backend_.createStagingBuffer(stagingInfo);
     const tga::BufferInfo info{tga::BufferUsage::storage, sizeof(Statistics), stagingBuffer_};
     buffer_ = backend_.createBuffer(info);
@@ -308,7 +308,7 @@ VPCRImpl::StatisticsBuffer::StatisticsBuffer(tga::Interface& backend) : backend_
 tga::CommandRecorder& VPCRImpl::StatisticsBuffer::Download(tga::CommandRecorder& recorder)
 {
     recorder.bufferDownload(buffer_, stagingBuffer_, sizeof(data));
-    data = *reinterpret_cast<VPCRImpl::Statistics *>(backend_.getMapping(stagingBuffer_));
+    data = *static_cast<VPCRImpl::Statistics *>(backend_.getMapping(stagingBuffer_));
     return recorder;
 }
 
