@@ -1,4 +1,6 @@
 #version 460
+#extension GL_ARB_gpu_shader_int64 : enable
+#extension GL_KHR_vulkan_glsl : enable
 
 const vec2 vertices[3] = vec2[3](
     vec2(-1,-1), 

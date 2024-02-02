@@ -1,9 +1,13 @@
 #version 460
+#extension GL_EXT_shader_atomic_int64 : enable
 #extension GL_ARB_gpu_shader_int64 : enable
 #extension GL_KHR_vulkan_glsl : enable
 #include "common.glsl"
 
-layout(set = 1, binding = 0, r32ui) uniform uimage2D renderTarget;
+layout(set = 1, binding = 0) buffer RENDER_TARGET{
+    uint64_t renderTarget[];
+};
+
 layout(set = 1, binding = 1, r32ui) uniform uimage2D depthBuffer;
 
 layout(set = 2, binding = 0) readonly buffer BatchList{
@@ -41,19 +45,22 @@ void main(){
             // projection is within window
             const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
 
-            // depth test via 32-bit-atomicMin
-            const uint depth = floatBitsToUint(projected.w);
+            // compare depth now as float
+            const float depth = projected.w;
 
-            /// early depth test
-            const uint depthFetch = imageLoad(depthBuffer, ivec2(coords)).x;
+            const float storedDepth = uintBitsToFloat(imageLoad(depthBuffer, ivec2(coords)).x);
 
-            if(depth < depthFetch){
-                const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
+            if(depth <= storedDepth * 1.01){    // when depth is within 1% range of front-most point, add to anti-aliasing
+                // store 32-bit color to 64-bit variable to avoid overflow
+                // add 8 more bit to each channel
+                // alpha channel is used as a counter
+                uint rgba = pointsRgba[k];
+                uint r = (rgba & 0xFF);
+                uint g = (rgba >> 8) & 0xFF;
+                uint b = (rgba >> 16) & 0xFF;
+                uint64_t rgba64 = (uint64_t(r) << 48) | (uint64_t(g) << 32) | (uint64_t(b) << 16) | 1;
 
-                // replace color, when depth changed
-                if(depth < oldValue){
-	                imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
-                }
+	            atomicAdd(renderTarget[getPixelID(camera.resolution, uvec2(coords))], rgba64);
             }
         }
     }

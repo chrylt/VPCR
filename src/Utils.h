@@ -4,6 +4,9 @@
 #include <string_view>
 #include <vector>
 
+// Should match compute shaders
+constexpr std::uint32_t ComputeLaneCount = 1024;
+
 constexpr auto MaxBatchSize = 8192;
 
 struct CompressedPosition {
@@ -31,6 +34,18 @@ struct Point {
 struct AABB {
     glm::vec3 minV;
     glm::vec3 maxV;
+};
+
+struct Bucket {
+    uint32_t bucketID;
+    int32_t nextIdx;
+    uint64_t acc;
+};
+
+struct Histogram {
+    int32_t startIdx;
+    uint32_t bucketCount;
+    Bucket buckets[100];  // maximal 100 filled buckets per pixel
 };
 
 std::vector<Point> LoadScene(std::string_view scene);

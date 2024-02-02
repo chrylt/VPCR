@@ -3,7 +3,10 @@
 #extension GL_KHR_vulkan_glsl : enable
 #include "common.glsl"
 
-layout(set = 1, binding = 0, r32ui) uniform uimage2D renderTarget;
+layout(set = 1, binding = 0) buffer RENDER_TARGET{
+    uint64_t renderTarget[];
+};
+
 layout(set = 1, binding = 1, r32ui) uniform uimage2D depthBuffer;
 
 layout(set = 2, binding = 0) readonly buffer BatchList{
@@ -48,12 +51,7 @@ void main(){
             const uint depthFetch = imageLoad(depthBuffer, ivec2(coords)).x;
 
             if(depth < depthFetch){
-                const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
-
-                // replace color, when depth changed
-                if(depth < oldValue){
-	                imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
-                }
+                imageAtomicMin(depthBuffer, ivec2(coords), depth);
             }
         }
     }
