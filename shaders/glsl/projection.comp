@@ -175,44 +175,52 @@ void main(){
             // depth test via 32-bit-atomicMin
             const uint depth = floatBitsToUint(projected.w);
 
-            if(warpWideDeduplication == 0)
-            {
-                const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
-                if(depth < oldValue){
-	                imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
-                }
-            }
-            else if(warpWideDeduplication == 1)
-            {
-                const ivec2 coordsXOr = subgroupClusteredXor( ivec2(coords) , 2);
-                const uint minDepth = subgroupClusteredMin( depth , 2);
+            // test if this thread should update framebuffers
 
-                if(coordsXOr.x != 0 || coordsXOr.y != 0 || minDepth == depth)
+            bool threadUpdate = false;
+            switch(warpWideDeduplication){
+                case 0:
                 {
-                    const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
-                    if(depth < oldValue){
-	                    imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
-                    }
+                    threadUpdate = true;
+                    break;
                 }
-            }
-            else if(warpWideDeduplication == 2)
-            {
+                case 1:
+                {
+                    const ivec2 coordsXOr = subgroupClusteredXor( ivec2(coords) , 2);
+                    const uint minDepth = subgroupClusteredMin( depth , 2);
+                    threadUpdate = coordsXOr.x != 0 || coordsXOr.y != 0 || minDepth == depth;
+                    break;
+                }
+                case 2:
+                {
 // GL_NV_shader_subgroup_partitioned is not working as expected.
 // GL_NV_gpu_shader5 should only be availble on Nvidia hardware so we use it.
 #if defined(GL_NV_gpu_shader5) && defined(GL_NV_shader_subgroup_partitioned)
-                const uvec4 mask = subgroupPartitionNV(ivec2(coords));
-                const uint minDepth = subgroupPartitionedMinNV(depth , mask);
+                    const uvec4 mask = subgroupPartitionNV(ivec2(coords));
+                    const uint minDepth = subgroupPartitionedMinNV(depth , mask);
 #else
-                uint minDepth = subgroupPartitionMin(ivec2(coords), depth);
+                    const uint minDepth = subgroupPartitionMin(ivec2(coords), depth);
 #endif
-                if (minDepth == depth)
-                {
+                    threadUpdate = minDepth == depth;
+                    break;
+                }
+            }
+
+            if(threadUpdate)
+            {
+                /// early depth test
+                const uint depthFetch = imageLoad(depthBuffer, ivec2(coords)).x;
+
+                if(depth < depthFetch){
                     const uint oldValue = imageAtomicMin(depthBuffer, ivec2(coords), depth);
+
+                    // replace color, when depth changed
                     if(depth < oldValue){
-	                    imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
+                        imageAtomicExchange(renderTarget, ivec2(coords), pointsRgba[k]);
                     }
                 }
             }
         }
     }
 }
+
