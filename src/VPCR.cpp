@@ -403,7 +403,7 @@ void VPCRImpl::CreateProjectionPass()
                                             // Set = 4: Statistics
                                             {{{tga::BindingType::storageBuffer}}}});
 
-        const tga::ComputePassInfo passInfo(computeShader, inputLayout);
+        const tga::ComputePassInfo passInfo(computeShader, inputLayout, 32);
         projectionPass = std::make_unique<TGAComputePass>(backend_, passInfo);
 
         projectionPass->BindInput(camera_->GetBuffer(), 0, 0);
