@@ -4,6 +4,9 @@
 #include <string_view>
 #include <vector>
 
+// Should match compute shaders
+constexpr std::uint32_t ComputeLaneCount = 1024;
+
 constexpr auto MaxBatchSize = 8192;
 
 struct CompressedPosition {

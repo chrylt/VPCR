@@ -1,15 +1,7 @@
 #version 460
-#extension GL_KHR_vulkan_glsl : enable
 #extension GL_ARB_gpu_shader_int64 : enable
-#include "utility_common.glsl"
-
-layout(set = 0, binding = 0) uniform Camera{
-    mat4 view;
-    mat4 projection;
-    vec3 direction;
-    vec3 position;
-    uvec2 resolution;
-}camera;
+#extension GL_KHR_vulkan_glsl : enable
+#include "common.glsl"
 
 layout(set = 1, binding = 0) readonly buffer RENDER_TARGET{
     uint64_t renderTarget[];

@@ -1,14 +1,43 @@
+#include "utility_common.glsl"
 
-layout(set = 2, binding = 0) readonly buffer Points_Position_low_Precision{
+layout(set = 0, binding = 0) uniform Camera{
+    mat4 view;
+    mat4 projection;
+    vec3 direction;
+    vec3 position;
+    uvec2 resolution;
+    uvec2 padding;
+    float nearFarDistance;
+}camera;
+
+layout(set = 0, binding = 1) uniform DynamicConst{
+    uint totalBatchCount;
+    float depthStepSize;
+    float lodExtend;
+};
+
+layout(set = 0, binding = 2) writeonly buffer Statistics{
+    uint drawnBatches;
+};
+
+layout(set = 0, binding = 3) readonly buffer Points_Position_low_Precision{
     uint pointsPosLow[];
 };
 
-layout(set = 2, binding = 1) readonly buffer Points_Position_medium_Precision{
+layout(set = 0, binding = 4) readonly buffer Points_Position_medium_Precision{
     uint pointsPosMedium[];
 };
 
-layout(set = 2, binding = 2) readonly buffer Points_Position_high_Precision{
+layout(set = 0, binding = 5) readonly buffer Points_Position_high_Precision{
     uint pointsPosHigh[];
+};
+
+layout(set = 0, binding = 6) buffer Points_Color{
+    uint pointsRgba[];
+};
+
+layout(set = 0, binding = 7) readonly buffer BatchNodes{
+    Node nodes[];  
 };
 
 uint getBatchPixelExtend(const Node currBatch, const uvec2 resolution, const mat4 projection, const mat4 view){
