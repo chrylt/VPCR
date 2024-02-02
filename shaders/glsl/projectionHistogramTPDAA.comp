@@ -67,11 +67,11 @@ void main(){
                 /// store 32-bit color to 64-bit variable to avoid overflow
                 /// add 8 more bit to each channel
                 /// alpha channel is used as a counter
-                uint rgba = pointsRgba[k];
-                uint r = (rgba & 0xFF);
-                uint g = (rgba >> 8) & 0xFF;
-                uint b = (rgba >> 16) & 0xFF;
-                uint64_t rgba64 = (uint64_t(r) << 48) | (uint64_t(g) << 32) | (uint64_t(b) << 16) | 1;
+                const uint rgba = pointsRgba[k];
+                const uint r = (rgba & 0xFF);
+                const uint g = (rgba >> 8) & 0xFF;
+                const uint b = (rgba >> 16) & 0xFF;
+                const uint64_t rgba64 = (uint64_t(r) << 48) | (uint64_t(g) << 32) | (uint64_t(b) << 16) | 1;
 
 	            atomicAdd(histogram[pixelID].buckets[bucketID].acc, rgba64);
             }

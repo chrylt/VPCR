@@ -28,10 +28,10 @@ void main()
     for(uint i = 0; i < BUCKET_COUNT_TPDAA; ++i){
         // unpack bucket values
         const uint64_t storedValue = histogram[pixelID].buckets[i].acc; 
-        float bucketCounter = float(storedValue & 0xFFFF);
-        float bucketR = float((storedValue >> 48) & 0xFFFF);
-        float bucketG = float((storedValue >> 32) & 0xFFFF);
-        float bucketB = float((storedValue >> 16) & 0xFFFF);
+        const float bucketCounter = float(storedValue & 0xFFFF);
+        const float bucketR = float((storedValue >> 48) & 0xFFFF);
+        const float bucketG = float((storedValue >> 32) & 0xFFFF);
+        const float bucketB = float((storedValue >> 16) & 0xFFFF);
 
         if(prevCounter > bucketCounter)
             break;  // local maximum found
