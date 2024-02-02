@@ -6,8 +6,8 @@ layout(set = 0, binding = 0) uniform Camera{
     vec3 direction;
     vec3 position;
     uvec2 resolution;
-    uvec2 padding;
     float nearFarDistance;
+    float fovY;
 }camera;
 
 layout(set = 0, binding = 1) uniform DynamicConst{

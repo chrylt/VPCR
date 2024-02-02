@@ -71,9 +71,10 @@ private:
         Off = 0,
         TwoPass = 1,
         DensityOnePass = 2,
+        DensityTwoPass = 3,
         AA_MODE_COUNT /* always keep this as the last element */
     };
-    constexpr inline static char const *AntiAliasingModeStrings[3] = {"OFF", "TWO PASS", "DENSITY"};
+    constexpr inline static char const *AntiAliasingModeStrings[AA_MODE_COUNT] = {"OFF", "TWO PASS", "DENSITY", "DENSITY TWO PASS"};
 
     void OnUpdate(std::uint32_t frameIndex);
     void OnRender(std::uint32_t frameIndex);
@@ -188,6 +189,15 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
                 }
                 case AntiAliasingMode::DensityOnePass: {
                     pipeline_ = pipelineFactory_->CreateOPDAAPipeline(
+                        config_, backend_, window_,
+                        std::vector<std::variant<tga::Buffer, tga::Texture, tga::ext::TopLevelAccelerationStructure>>{
+                            camera_->GetBuffer(), dynamicConst_->GetBuffer(), statistics_->GetBuffer(), low, medium,
+                            high, color, pointCloudAcceleration_->GetBatchesBuffer()},
+                        pointCloudAcceleration_->GetBatchCount());
+                    break;
+                }
+                case AntiAliasingMode::DensityTwoPass: {
+                    pipeline_ = pipelineFactory_->CreateTPDAAPipeline(
                         config_, backend_, window_,
                         std::vector<std::variant<tga::Buffer, tga::Texture, tga::ext::TopLevelAccelerationStructure>>{
                             camera_->GetBuffer(), dynamicConst_->GetBuffer(), statistics_->GetBuffer(), low, medium,

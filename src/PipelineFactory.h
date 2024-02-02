@@ -18,6 +18,9 @@ public:
     std::unique_ptr<IPipeline> CreateOPDAAPipeline(const Config& config, tga::Interface& backend,
                                                    const tga::Window& window, Resources resources,
                                                    std::uint32_t batchCount);
+    std::unique_ptr<IPipeline> CreateTPDAAPipeline(const Config& config, tga::Interface& backend,
+                                                   const tga::Window& window, Resources resources,
+                                                   std::uint32_t batchCount);
 
 private:
     // TODO: resources shared by pipelines
