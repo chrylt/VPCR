@@ -7,6 +7,8 @@
 #include "TGAPointCloudAcceleration.h"
 #include "Utils.h"
 
+#include "imgui/imgui.h"
+
 namespace
 {
 // Should match compute shaders
@@ -119,6 +121,9 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     CreateLODPass();
     CreateProjectionPass();
     CreateDisplayPass();
+
+    // Init GUI
+    backend_.initGUI(window_);
 }
 
 void VPCRImpl::Run()
@@ -231,6 +236,11 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
     projectionPass->Execute(commandRecorder, batchCount);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::FragmentShader);
     displayPass->Execute(commandRecorder, frameIndex);
+
+    // GUI Execution Commands
+    commandRecorder.guiStartFrame();
+    ImGui::ShowDemoWindow(0);
+    commandRecorder.guiEndFrame();
 
     // Execute
     commandBuffer = commandRecorder.endRecording();
@@ -418,7 +428,6 @@ void VPCRImpl::CreateDisplayPass()
         displayPass->BindInput(pipeline.renderTarget, 0);
     }
 }
-
 }  // namespace
 
 std::unique_ptr<VPCR> CreateVPCR(Config config) { return std::make_unique<VPCRImpl>(std::move(config)); }
