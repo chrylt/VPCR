@@ -314,10 +314,12 @@ struct RenderPassInfo {
 struct ComputePassInfo {
     Shader computeShader;    /**<The Shader to be executed in this ComoutePass.*/
     InputLayout inputLayout; /**<Describes how the Bindings are organized*/
+    std::uint32_t requiredSubgroupSize;
 
     // Constructor with single window
-    ComputePassInfo(Shader const& _computeShader, InputLayout const& _inputLayout = InputLayout())
-        : computeShader(_computeShader), inputLayout(_inputLayout)
+    ComputePassInfo(Shader const& _computeShader, InputLayout const& _inputLayout = InputLayout(),
+                    std::uint32_t _requiredSubgroupSize = 0)
+        : computeShader(_computeShader), inputLayout(_inputLayout), requiredSubgroupSize(_requiredSubgroupSize)
     {}
 
     // chaining setters for "Info().setX(x).setY(y)" pattern
@@ -403,11 +405,12 @@ namespace ext
         TGA_SETTER(setVertexOffset, uint32_t, vertexOffset)
     };
 
-    using TransformMatrix = std::array<std::array<float, 4>, 3>; /**<4x3 row major matrix defining the transform of this */
+    using TransformMatrix =
+        std::array<std::array<float, 4>, 3>; /**<4x3 row major matrix defining the transform of this */
 
     struct AccelerationStructureInstanceInfo {
         BottomLevelAccelerationStructure blas;
-        TransformMatrix transform; 
+        TransformMatrix transform;
     };
 
     struct TopLevelAccelerationStructureInfo {

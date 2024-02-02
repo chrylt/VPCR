@@ -74,18 +74,6 @@ PFN_FUN(void, vkCmdBuildAccelerationStructuresKHR,
 
 namespace tga
 {
-void loadVkDeviceExtensions(vk::Device& device)
-{
-    PFN_INIT(device, vkCreateAccelerationStructureKHR);
-    PFN_INIT(device, vkDestroyAccelerationStructureKHR);
-    PFN_INIT(device, vkGetAccelerationStructureDeviceAddressKHR);
-    PFN_INIT(device, vkGetAccelerationStructureBuildSizesKHR);
-    PFN_INIT(device, vkCmdBuildAccelerationStructuresKHR);
-
-    if (!pfn_vkCreateAccelerationStructureKHR || !pfn_vkDestroyAccelerationStructureKHR ||
-        !pfn_vkGetAccelerationStructureDeviceAddressKHR || !pfn_vkGetAccelerationStructureBuildSizesKHR ||
-        !pfn_vkCmdBuildAccelerationStructuresKHR)
-        std::cerr << "Ray Tracing not available\n";
-}
+void loadVkDeviceExtensions(vk::Device& device) {}
 
 }  // namespace tga
