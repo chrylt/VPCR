@@ -131,14 +131,14 @@ void main(){
                         // insert between buckets
                         /// allocate new bucket
                         /// allocate new bucket
-                        uint oldBucketCount = atomicCompSwap(depthBuffer[pixelID].bucketCount, bucketCount, bucketCount + 1);
+                        const uint oldBucketCount = atomicCompSwap(depthBuffer[pixelID].bucketCount, bucketCount, bucketCount + 1);
                         if(oldBucketCount == bucketCount){
                             // allocation worked
                             int newIdx = int(oldBucketCount);
                             initBucket(depthBuffer[pixelID].buckets[newIdx], bucketID, nextIdx, rgba64);
 
                             /// change references to point to new bucket
-                            int oldValue = atomicCompSwap(depthBuffer[pixelID].buckets[currIdx].nextIdx, nextIdx, newIdx); 
+                            const int oldValue = atomicCompSwap(depthBuffer[pixelID].buckets[currIdx].nextIdx, nextIdx, newIdx); 
                             if(oldValue == nextIdx){
                                 finishedInsertPoint = true;
                             }else{
