@@ -139,6 +139,9 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
             camera_->GetBuffer(), dynamicConst_->GetBuffer(), statistics_->GetBuffer(), low, medium, high, color,
             pointCloudAcceleration_->GetBatchesBuffer()},
         pointCloudAcceleration_->GetBatchCount());
+
+    // Init GUI
+    backend_.initGUI(window_);
 }
 
 void VPCRImpl::Run()

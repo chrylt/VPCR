@@ -2,6 +2,7 @@
 
 #include "TGAGpuPass.h"
 #include "Utils.h"
+#include "imgui/imgui.h"
 
 TPAAPipeline::TPAAPipeline(const Config& config, tga::Interface& backend, const tga::Window& window,
                            const Resources resources, const std::uint32_t batchCount)
@@ -67,6 +68,11 @@ void TPAAPipeline::Execute(const std::uint32_t frameIndex, const std::span<const
     projectionColorPass->Execute(commandRecorder, batchCount_);
     commandRecorder.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::FragmentShader);
     displayPass->Execute(commandRecorder, frameIndex);
+
+    // GUI Execution Commands
+    commandRecorder.guiStartFrame();
+    ImGui::ShowDemoWindow(0);
+    commandRecorder.guiEndFrame();
 
     // Execute
     commandBuffer = commandRecorder.endRecording();
