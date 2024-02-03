@@ -11,6 +11,7 @@ TGACamera::TGACamera(tga::Interface& tgai, const std::uint32_t resX, const std::
     cam_.projection = glm::perspective_vk(glm::radians(cam_.fovY), static_cast<float>(resX) / static_cast<float>(resY),
                                           nearPlane, farPlane);
     cam_.nearFarDistance = farPlane - nearPlane;
+    cam_.zFar = farPlane;
 
     const tga::StagingBufferInfo stagingCameraInfo(sizeof(Camera));
     staging_ = backend_.createStagingBuffer(stagingCameraInfo);

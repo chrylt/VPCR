@@ -1,11 +1,11 @@
 #include "TPDAAPipeline.h"
 
+#include "Gui.h"
 #include "TGAGpuPass.h"
 #include "Utils.h"
-#include "imgui/imgui.h"
 
 TPDAAPipeline::TPDAAPipeline(const Config& config, tga::Interface& backend, const tga::Window& window,
-                           const Resources resources, const std::uint32_t batchCount)
+                             const Resources resources, const std::uint32_t batchCount)
     : config_(config), backend_(backend), window_(window), batchCount_(batchCount)
 {
     pipelines_.resize(backend_.backbufferCount(window_));
@@ -33,7 +33,7 @@ TPDAAPipeline::~TPDAAPipeline()
 }
 
 void TPDAAPipeline::Execute(const std::uint32_t frameIndex, const std::span<const UploadData *const> uploads,
-                           const std::span<DownloadData *const> downloads)
+                            const std::span<DownloadData *const> downloads)
 {
     auto& commandBuffer = pipelines_[frameIndex].commandBuffer;
     const auto& clearPass = pipelines_[frameIndex].clearPass;
@@ -71,7 +71,7 @@ void TPDAAPipeline::Execute(const std::uint32_t frameIndex, const std::span<cons
 
     // GUI Execution Commands
     commandRecorder.guiStartFrame();
-    ImGui::ShowDemoWindow(0);
+    RenderGui(config_);
     commandRecorder.guiEndFrame();
 
     // Execute
@@ -128,7 +128,8 @@ void TPDAAPipeline::CreateClearPass(const Resources resources)
         auto& clearPass = pipeline.clearPass;
 
         // Use utility function to load Shader from File
-        const auto computeShader = tga::loadShader("../shaders/clearTPDAA_comp.spv", tga::ShaderType::compute, backend_);
+        const auto computeShader =
+            tga::loadShader("../shaders/clearTPDAA_comp.spv", tga::ShaderType::compute, backend_);
 
         const tga::InputLayout inputLayout(
             {// Set = 0: Camera, DynamicConst, Statistics, PointsPositionLowPrecision, PointsPositionMediumPrecision,

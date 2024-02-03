@@ -53,9 +53,17 @@ void main(){
             const uint64_t depthFetch = framebuffer[pixelID];
 
             if(framebufferNewEntry < depthFetch){
-
                 // add the color information to entry
-                framebufferNewEntry |= pointsRgba[k];   
+                uint rgba = pointsRgba[k];
+
+                if((toggleFlags & 1) != 0){
+                    rgba = wang_hash(batchList[id]);
+                }else if((toggleFlags & 2) != 0){
+                    const uint depth = (batch.maskDepthCount >> 8) & 31;
+                    rgba = wang_hash(depth);
+                }
+
+                framebufferNewEntry |= rgba;   
 
                 // actual depth test
                 atomicMin(framebuffer[pixelID], framebufferNewEntry);

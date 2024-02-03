@@ -45,7 +45,7 @@ std::uint64_t CreateMortonWithDepth(std::uint64_t code, const std::uint8_t depth
 
 class MortonTree {
 public:
-    MortonTree(std::vector<Point> points) : pointCount_(static_cast<std::uint32_t>(points.size()))
+    MortonTree(std::vector<Point> points) : maxTreeDepth_(0), pointCount_(static_cast<std::uint32_t>(points.size()))
     {
         // We want to insert points in random order to generate a LOD tree where each level is a subset of points from
         // the lower levels. We start by inserting points in the highest level, once that has MaxBatchSize many points,
@@ -58,6 +58,8 @@ public:
             while (!InsertPoint(CreateMortonWithDepth(point.mortonCode, depth), point)) {
                 ++depth;
             }
+
+            maxTreeDepth_ = std::max(depth, maxTreeDepth_);
         }
 
         // TODO Sift points into child if node only has one child
@@ -93,6 +95,8 @@ public:
         return tree;
     }
 
+    std::uint32_t GetMaxTreeDepth() const { return maxTreeDepth_; }
+
 private:
     bool InsertPoint(const std::uint64_t code, const Point& point)
     {
@@ -103,6 +107,8 @@ private:
         batches_[code].push_back(point);
         return true;
     }
+
+    std::uint8_t maxTreeDepth_;
 
     std::uint32_t pointCount_;
     std::unordered_map<std::uint64_t, std::vector<Point>> batches_;
@@ -165,7 +171,15 @@ BatchesCompressed ConvertToAdaptivePrecision(const std::vector<Node>& batches, c
 TGAPointCloudAcceleration::TGAPointCloudAcceleration(tga::Interface& tgai, const std::string_view scenePath)
     : backend_(tgai)
 {
-    const auto [points, batchNodes] = MortonTree(LoadScene(scenePath)).GetLODTree();
+    std::vector<Point> points;
+    std::vector<Node> batchNodes;
+    {
+        const auto tree = MortonTree(LoadScene(scenePath));
+        maxTreeDepth_ = tree.GetMaxTreeDepth();
+        auto lodTree = tree.GetLODTree();
+        points = std::move(lodTree.points);
+        batchNodes = std::move(lodTree.batchNodes);
+    }
 
     batchCount_ = static_cast<std::uint32_t>(batchNodes.size());
 
@@ -225,6 +239,8 @@ TGAPointCloudAcceleration::PointBuffers TGAPointCloudAcceleration::GetPointsBuff
 tga::Buffer TGAPointCloudAcceleration::GetBatchesBuffer() const { return batchesBuffer_; }
 
 std::uint32_t TGAPointCloudAcceleration::GetBatchCount() const { return batchCount_; }
+
+std::uint32_t TGAPointCloudAcceleration::GetMaxTreeDepth() const { return maxTreeDepth_; }
 
 TGAPointCloudAcceleration::~TGAPointCloudAcceleration()
 {

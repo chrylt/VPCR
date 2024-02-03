@@ -32,6 +32,14 @@ private:
         std::uint32_t totalBatchCount;
         float depthStepSize;
         float lodExtend;
+        float cullingFovY;
+        std::uint32_t showTreeDepth;  // 0 means show all layers
+        struct {
+            std::uint32_t colorBatchById : 1;
+            std::uint32_t colorTreeByDepth : 1;
+            std::uint32_t enableFrustumCulling : 1;
+            std::uint32_t enableLOD : 1;
+        };  // toggleFlags
     };
 
     class DynamicConstBuffer : public IPipeline::UploadData {
@@ -74,7 +82,8 @@ private:
         DensityTwoPass = 3,
         AA_MODE_COUNT /* always keep this as the last element */
     };
-    constexpr inline static char const *AntiAliasingModeStrings[AA_MODE_COUNT] = {"OFF", "TWO PASS", "DENSITY", "DENSITY TWO PASS"};
+    constexpr inline static char const *AntiAliasingModeStrings[AA_MODE_COUNT] = {"OFF", "TWO PASS", "DENSITY",
+                                                                                  "DENSITY TWO PASS"};
 
     void OnUpdate(std::uint32_t frameIndex);
     void OnRender(std::uint32_t frameIndex);
@@ -143,6 +152,11 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
 
     // Init GUI
     backend_.initGUI(window_);
+
+    config_.Set("LOD.maxTreeDepth", static_cast<int>(pointCloudAcceleration_->GetMaxTreeDepth()));
+    config_.Set("LOD.maxSelection", std::sqrtf(static_cast<float>(res[0] * res[0] + res[1] * res[1])));
+    config_.Set("LOD.selection", std::cbrtf(MaxBatchSize));
+    config_.Set("LOD.defaultSelection", std::cbrtf(MaxBatchSize));
 }
 
 void VPCRImpl::Run()
@@ -150,6 +164,7 @@ void VPCRImpl::Run()
     config_.Set("ShouldClose", false);
     while (!config_.Get<bool>("ShouldClose").value_or(true)) {
         const auto nextFrame = backend_.nextFrame(window_);
+        config_.ApplyDirty();
         OnUpdate(nextFrame);
         OnRender(nextFrame);
     }
@@ -162,6 +177,17 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
     lastFrameTimeStamp_ = currentTime;
 
     ++frameCounter_;
+
+    // Apply config
+    {
+        dynamicConst_->data.enableFrustumCulling = config_.Get<bool>("LOD.culling").value();
+        dynamicConst_->data.enableLOD = config_.Get<bool>("LOD.acceleration").value();
+        dynamicConst_->data.colorBatchById = config_.Get<bool>("LOD.colorBatch").value();
+        dynamicConst_->data.colorTreeByDepth = config_.Get<bool>("LOD.colorDepth").value();
+        dynamicConst_->data.showTreeDepth = config_.Get<int>("LOD.level").value();
+        dynamicConst_->data.lodExtend = config_.Get<float>("LOD.selection").value();
+        dynamicConst_->data.cullingFovY = config_.Get<float>("LOD.cullingFov").value();
+    }
 
     // Toggle Features bases on user input
     {
