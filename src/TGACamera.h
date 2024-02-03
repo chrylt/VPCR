@@ -16,6 +16,7 @@ public:
         alignas(16) glm::uvec2 resolution = glm::uvec2(1, 1);
         alignas(4) float nearFarDistance;
         alignas(4) float fovY;
+        alignas(4) float zFar;
     };
 
     TGACamera(tga::Interface& tgai, std::uint32_t resX, std::uint32_t resY, glm::vec3 position = glm::vec3(0),

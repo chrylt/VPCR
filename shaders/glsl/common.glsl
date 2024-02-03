@@ -8,6 +8,7 @@ layout(set = 0, binding = 0) uniform Camera{
     uvec2 resolution;
     float nearFarDistance;
     float fovY;
+    float zFar;
 }camera;
 
 layout(set = 0, binding = 1) uniform DynamicConst{
@@ -15,6 +16,9 @@ layout(set = 0, binding = 1) uniform DynamicConst{
     float depthStepSize;
     float lodExtend;
     uint warpWideDeduplication;
+    float cullingFovY;
+    uint showTreeDepth; // 0 means show all layers
+    uint toggleFlags; // colorBatchById 1, colorTreeByDepth 2, enableFrustumCulling 4, enableLOD 8
 };
 
 layout(set = 0, binding = 2) writeonly buffer Statistics{

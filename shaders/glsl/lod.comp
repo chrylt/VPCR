@@ -10,6 +10,55 @@ layout(set = 1, binding = 0) buffer BatchList{
 
 layout(local_size_x = 1024) in;
 
+float distanceToPlane( vec4 plane, vec3 point )
+{
+    return dot(vec4(point, 1), plane);
+}
+
+bool isOnFrustum(const vec3 sphereCenter, const float radius){
+    const float aspect = float(camera.resolution.x) / float(camera.resolution.y);
+    const float halfVSide = camera.zFar * tan(radians(cullingFovY * .5f));
+    const float halfHSide = halfVSide * aspect;
+    const vec3 frontMultFar = camera.zFar * camera.direction;
+    const vec3 camUpTemp = vec3(0,1,0);
+    const vec3 camRight = normalize(cross(camera.direction, camUpTemp));
+    const vec3 camUp = normalize(cross(camRight, camera.direction));
+
+    const vec3 nearFacePos = camera.position + (camera.zFar - camera.nearFarDistance) * camera.direction;
+    const vec3 farFacePos = camera.position + frontMultFar;
+    const vec3 rightFacePos = camera.position;
+    const vec3 leftFacePos = camera.position;
+    const vec3 topFacePos = camera.position;
+    const vec3 bottomFacePos = camera.position;
+
+    const vec3 nearFaceNormal = camera.direction;
+    const vec3 farFaceNormal = -camera.direction;
+    const vec3 rightFaceNormal = normalize(cross(camUp, frontMultFar + camRight * halfHSide));
+    const vec3 leftFaceNormal = normalize(cross(frontMultFar - camRight * halfHSide, camUp));
+    const vec3 topFaceNormal = normalize(cross(frontMultFar + camUp * halfVSide, camRight));
+    const vec3 bottomFaceNormal = normalize(cross(camRight, frontMultFar - camUp * halfVSide));
+
+    const vec4 nearFace = vec4(nearFaceNormal, -dot(nearFaceNormal, nearFacePos));
+    const vec4 farFace = vec4(farFaceNormal, -dot(farFaceNormal, farFacePos));
+    const vec4 rightFace = vec4(leftFaceNormal, -dot(leftFaceNormal, leftFacePos));
+    const vec4 leftFace = vec4(rightFaceNormal, -dot(rightFaceNormal, rightFacePos));
+    const vec4 topFace = vec4(topFaceNormal, -dot(topFaceNormal, topFacePos));
+    const vec4 bottomFace = vec4(bottomFaceNormal, -dot(bottomFaceNormal, bottomFacePos));
+
+    const float dt = distanceToPlane(topFace, sphereCenter);
+    const float db = distanceToPlane(bottomFace, sphereCenter);
+    const float dl = distanceToPlane(leftFace, sphereCenter);
+    const float dr = distanceToPlane(rightFace, sphereCenter);
+    const float dn = distanceToPlane(nearFace, sphereCenter);
+    const float df = distanceToPlane(farFace, sphereCenter);
+
+    const bool ix = ((dl > 0) && (dr > 0)) || (abs(dl) <= radius) || (abs(dr) <= radius);
+    const bool iy = ((dt > 0) && (db > 0)) || (abs(dt) <= radius) || (abs(db) <= radius);
+    const bool iz = ((dn > 0) && (dn > 0)) || (abs(dn) <= radius) || (abs(df) <= radius);
+
+    return ix && iy && iz;
+}
+
 void main(){
     const uint id = gl_GlobalInvocationID.x;
     if (id >= totalBatchCount){
@@ -18,42 +67,28 @@ void main(){
     
     // TODO: traverse tree instead of processing all nodes
     const Node batchNode = nodes[id];
-    
-    const vec3[8] aabbCorners = vec3[](
-        vec3(batchNode.box.minX, batchNode.box.minY, batchNode.box.minZ), // 0 - minimum
-        vec3(batchNode.box.minX, batchNode.box.minY, batchNode.box.maxZ), // 0 0 1 -> 1
-        vec3(batchNode.box.minX, batchNode.box.maxY, batchNode.box.minZ), // 0 1 0 -> 2
-        vec3(batchNode.box.minX, batchNode.box.maxY, batchNode.box.maxZ), // 0 1 1 -> 3
-        vec3(batchNode.box.maxX, batchNode.box.minY, batchNode.box.minZ), // 1 0 0 -> 4
-        vec3(batchNode.box.maxX, batchNode.box.minY, batchNode.box.maxZ), // 1 0 1 -> 5
-        vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.minZ), // 1 1 0 -> 6
-        vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.maxZ)  // 7 - maximum
-    );
-    
-    // Project batch bounding box and check for extent on screen and visibility
-    bool isVisible = false;
-    uvec2 screenMin = camera.resolution;
-    uvec2 screenMax = uvec2(0);
-    for (uint i = 0; i < 8; ++i) {
-        vec4 corner = camera.projection * camera.view * vec4(aabbCorners[i], 1);
-        const vec2 divided = (corner / abs(corner.w)).xy;
-        const vec2 pixelSpace = ((divided + 1) / 2) * camera.resolution;
 
-        screenMin = ivec2(min(screenMin, pixelSpace));
-        screenMax = ivec2(max(screenMax, pixelSpace));
-
-        if((-corner.w <= corner.x) && (corner.x <= corner.w) &&
-            (-corner.w <= corner.y) && (corner.y <= corner.w) &&
-            (0.f <= corner.z) && (corner.z <= corner.w)){
-            isVisible = true;
+    if(showTreeDepth != 0){
+        const uint depth = (batchNode.maskDepthCount >> 8) & 31;
+        if(depth != (showTreeDepth - 1)){
+            return;
         }
     }
-
-    const uint pixelExtend = max(screenMax.x - screenMin.x, screenMax.y - screenMin.y);
     
-    // Frustum culling + LOD selection
-    if (isVisible && (pixelExtend > lodExtend)){
-        const uint currentBatchCount = atomicAdd(batchCount, 1);
-        batchList[currentBatchCount] = id;
+    const vec3 min = vec3(batchNode.box.minX, batchNode.box.minY, batchNode.box.minZ);
+    const vec3 max = vec3(batchNode.box.maxX, batchNode.box.maxY, batchNode.box.maxZ);
+    const vec3 sphereCenter = (min + max) * .5f;
+    const float distance = distance(min, sphereCenter);
+    const bool isVisible = isOnFrustum(sphereCenter, distance);
+
+    // Frustum culling
+    if ((((toggleFlags & 4) == 0) || isVisible)){
+        const uint pixelExtend = getBatchPixelExtend(batchNode, camera.resolution, camera.projection, camera.view);
+        
+        // LOD selection
+        if((((toggleFlags & 8) == 0) || (pixelExtend > lodExtend))){
+            const uint currentBatchCount = atomicAdd(batchCount, 1);
+            batchList[currentBatchCount] = id;
+        }
     }
 }

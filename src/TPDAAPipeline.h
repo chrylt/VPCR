@@ -13,7 +13,7 @@ public:
     using Resources = std::span<const std::variant<tga::Buffer, tga::Texture, tga::ext::TopLevelAccelerationStructure>>;
 
     TPDAAPipeline(const Config& config, tga::Interface& backend, const tga::Window& window, Resources resources,
-                 std::uint32_t batchCount);
+                  std::uint32_t batchCount);
 
     void Execute(std::uint32_t frameIndex, std::span<const UploadData *const> uploads,
                  std::span<DownloadData *const> downloads) override;

@@ -63,7 +63,6 @@ void main(){
             const uint depth = floatBitsToUint(projected.w);
 
             // test if this thread should update framebuffers
-
             bool threadUpdate = false;
             switch(warpWideDeduplication){
                 case 0:
@@ -96,7 +95,16 @@ void main(){
 
                 if(framebufferNewEntry < depthFetch){
                     // add the color information to entry
-                    framebufferNewEntry |= pointsRgba[k];   
+                    uint rgba = pointsRgba[k];
+
+                    if((toggleFlags & 1) != 0){
+                        rgba = wang_hash(batchList[id]);
+                    }else if((toggleFlags & 2) != 0){
+                        const uint depth = (batch.maskDepthCount >> 8) & 31;
+                        rgba = wang_hash(depth);
+                    }
+
+                    framebufferNewEntry |= rgba;
 
                     // actual depth test
                     atomicMin(framebuffer[pixelID], framebufferNewEntry);
@@ -105,4 +113,3 @@ void main(){
         }
     }
 }
-

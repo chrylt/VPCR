@@ -51,10 +51,18 @@ void main(){
             const float storedDepth = uintBitsToFloat(imageLoad(depthBuffer, ivec2(coords)).x);
 
             if(depth <= storedDepth * 1.01){    // when depth is within 1% range of front-most point, add to anti-aliasing
+                uint rgba = pointsRgba[k];
+
+                if((toggleFlags & 1) != 0){
+                    rgba = wang_hash(batchList[id]);
+                }else if((toggleFlags & 2) != 0){
+                    const uint depth = (batch.maskDepthCount >> 8) & 31;
+                    rgba = wang_hash(depth);
+                }
+                
                 // store 32-bit color to 64-bit variable to avoid overflow
                 // add 8 more bit to each channel
                 // alpha channel is used as a counter
-                uint rgba = pointsRgba[k];
                 uint r = (rgba & 0xFF);
                 uint g = (rgba >> 8) & 0xFF;
                 uint b = (rgba >> 16) & 0xFF;

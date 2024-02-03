@@ -1,8 +1,8 @@
 #include "BasicPipeline.h"
 
+#include "Gui.h"
 #include "TGAGpuPass.h"
 #include "Utils.h"
-#include "imgui/imgui.h"
 
 BasicPipeline::BasicPipeline(const Config& config, tga::Interface& backend, const tga::Window& window,
                              const Resources resources, const std::uint32_t batchCount)
@@ -65,7 +65,7 @@ void BasicPipeline::Execute(const std::uint32_t frameIndex, const std::span<cons
 
     // GUI Execution Commands
     commandRecorder.guiStartFrame();
-    ImGui::ShowDemoWindow(0);
+    RenderGui(config_);
     commandRecorder.guiEndFrame();
 
     // Execute
