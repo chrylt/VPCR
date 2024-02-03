@@ -194,10 +194,9 @@ void main(){
                 case 2:
                 {
 // GL_NV_shader_subgroup_partitioned is not working as expected.
-// GL_NV_gpu_shader5 should only be availble on Nvidia hardware so we use it.
-#if defined(GL_NV_gpu_shader5) && defined(GL_NV_shader_subgroup_partitioned)
-                    const uvec4 mask = subgroupPartitionNV(ivec2(coords));
-                    const uint minDepth = subgroupPartitionedMinNV(depth , mask);
+// GL_NV_ray_tracing should only be availble on Nvidia hardware so we use it.
+#if defined(GL_NV_ray_tracing) && defined(GL_NV_shader_subgroup_partitioned)
+                    const uint minDepth = subgroupPartitionMin(ivec2(coords), depth);
 #else
                     const uint minDepth = subgroupPartitionMin(ivec2(coords), depth);
 #endif

@@ -240,8 +240,10 @@ namespace /*init vulkan objects*/
             else
                 return {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME,
                         VK_NV_SHADER_SUBGROUP_PARTITIONED_EXTENSION_NAME};
-        }(subgroupProperties.supportedOperations == vk::SubgroupFeatureFlagBits::ePartitionedNV);
-        if (subgroupProperties.supportedOperations == vk::SubgroupFeatureFlagBits::ePartitionedNV) {
+        }((subgroupProperties.supportedOperations & vk::SubgroupFeatureFlagBits::ePartitionedNV) ==
+                                                                  vk::SubgroupFeatureFlagBits::ePartitionedNV);
+        if ((subgroupProperties.supportedOperations & vk::SubgroupFeatureFlagBits::ePartitionedNV) ==
+            vk::SubgroupFeatureFlagBits::ePartitionedNV) {
             std::cout << "Vulkan Subgroup Partitioned extension enabled\n";
         } else {
             std::cout << "Vulkan Subgroup Partitioned extension not availble\n";
