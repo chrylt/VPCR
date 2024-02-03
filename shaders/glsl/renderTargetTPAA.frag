@@ -18,9 +18,9 @@ void main()
     const float b = float((storedValue >> 16) & 0xFFFF) / counter;
     color = vec4(vec3(r, g, b) / 255, 1);
 
-    if(counter >= 255)
+    if(counter >= 255 && (toggleFlags & 32) != 0)
     {
         // overflow detected
-        color = vec4(1, 0, 0, 1);
+        color = vec4(1, 0, 1, 1);
     }
 }

@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "Config.h"
+#include "Utils.h"
 
 Config GetDefaultConfig()
 {
@@ -23,6 +24,14 @@ Config GetDefaultConfig()
     config.Set("LOD.maxSelection", 0.f);
     config.Set("LOD.cullingFov", 70.f);
     config.Set("LOD.defaultCullingFov", 70.f);
+    config.Set("VP.vis", false);
+    config.Set("AA.currAAMode", AntiAliasingMode::Off);
+    config.Set("AA.errorShow", false);
+    config.Set("AA.preventOverflow", true);
+    config.Set("AA.preventedOverflowVis", false);
+    config.Set("DAA.visualizeDensityBuckets", false);
+    config.Set("TPDAA.bucketIDToShow", 0);
+    config.Set("OPDAA.bucketSize", (1000.0f / static_cast<float>(std::numeric_limits<int>::max())) * 100);
 
     return config;
 }
