@@ -25,16 +25,17 @@ private:
 
     struct KeyPressed {
         bool j = false;
+        bool e = false;
     };
 
-    enum WarpWideDeduplicationSetting : std::uint32_t { None, Pairs, Full, COUNT };
+    enum WarpWideDedMode : std::uint32_t { None, Pairs, Full, COUNT };
 
     struct DynamicConst {
         // Misc information we need on gpu
         std::uint32_t totalBatchCount;
         float depthStepSize;
         float lodExtend;
-        WarpWideDeduplicationSetting warpWideDeduplication;
+        WarpWideDedMode warpWideDeduplication;
     };
 
     class DynamicConstBuffer : public IPipeline::UploadData {
@@ -77,7 +78,8 @@ private:
         DensityTwoPass = 3,
         AA_MODE_COUNT /* always keep this as the last element */
     };
-    constexpr inline static char const *AntiAliasingModeStrings[AA_MODE_COUNT] = {"OFF", "TWO PASS", "DENSITY", "DENSITY TWO PASS"};
+    constexpr inline static char const *AntiAliasingModeStrings[AA_MODE_COUNT] = {"OFF", "TWO PASS", "DENSITY",
+                                                                                  "DENSITY TWO PASS"};
 
     void OnUpdate(std::uint32_t frameIndex);
     void OnRender(std::uint32_t frameIndex);
@@ -102,6 +104,7 @@ private:
     std::unique_ptr<IPipeline> pipeline_;
 
     AntiAliasingMode currAntiAliasingMode = AntiAliasingMode::Off;
+    WarpWideDedMode currWarpWideMode = WarpWideDedMode::None;
 
     std::unique_ptr<TGAPointCloudAcceleration> pointCloudAcceleration_;
 };
@@ -214,6 +217,12 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
             }
         }
         keyPressed_.j = backend_.keyDown(window_, tga::Key::J);
+
+        if (keyPressed_.e && !backend_.keyDown(window_, tga::Key::E)) {
+            currWarpWideMode = static_cast<WarpWideDedMode>((currWarpWideMode + 1) % WarpWideDedMode::COUNT);
+            dynamicConst_.get()->data.warpWideDeduplication = currWarpWideMode;
+        }
+        keyPressed_.e = backend_.keyDown(window_, tga::Key::E);
     }
 
     // Print FPS and statistics on window title
@@ -275,15 +284,6 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
         }
 
         camera_->Update(position, jaw, pitch);
-    }
-
-    // Update DynamicConst
-    {
-        if (backend_.keyDown(window_, tga::Key::W)) {
-            const auto newMode = static_cast<WarpWideDeduplicationSetting>((dynamicConst_.warpWideDeduplication + 1) %
-                                                                           WarpWideDeduplicationSetting::COUNT);
-            dynamicConst_.warpWideDeduplication = newMode;
-        }
     }
 }
 

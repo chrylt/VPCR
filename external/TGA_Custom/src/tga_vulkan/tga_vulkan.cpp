@@ -1535,6 +1535,18 @@ void Interface::guiEndFrame(CommandBuffer cmdBuffer)
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdData.cmdBuffer, VK_NULL_HANDLE);
 }
 
+bool Interface::isSubgroupPartitionedSupported()
+{
+    vk::PhysicalDeviceProperties2 properties;
+    vk::PhysicalDeviceSubgroupProperties subgroupProperties;
+
+    properties.pNext = &subgroupProperties;
+    state.get()->pDevice.getProperties2(&properties);
+
+    return (subgroupProperties.supportedOperations & vk::SubgroupFeatureFlagBits::ePartitionedNV) ==
+           vk::SubgroupFeatureFlagBits::ePartitionedNV;
+}
+
 void Interface::free(Shader shader)
 {
     if (!shader) return;

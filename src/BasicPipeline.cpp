@@ -184,7 +184,9 @@ void BasicPipeline::CreateProjectionPass(const Resources resources)
 
         // Use utility function to load Shader from File
         const auto computeShader =
-            tga::loadShader("../shaders/projection_comp.spv", tga::ShaderType::compute, backend_);
+            backend_.isSubgroupPartitionedSupported()
+                ? tga::loadShader("../shaders/projectionPartitionedSupp_comp.spv", tga::ShaderType::compute, backend_)
+                : tga::loadShader("../shaders/projection_comp.spv", tga::ShaderType::compute, backend_);
 
         const tga::InputLayout inputLayout(
             {// Set = 0: Camera, DynamicConst, Statistics, PointsPositionLowPrecision, PointsPositionMediumPrecision,
