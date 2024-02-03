@@ -11,8 +11,7 @@ BasicPipeline::BasicPipeline(const Config& config, tga::Interface& backend, cons
     pipelines_.resize(backend_.backbufferCount(window_));
 
     CreateBatchList();
-    CreateRenderTarget();
-    CreateDepthBuffer();
+    CreateFrameBuffer();
 
     // Create Passes
     CreateClearPass(resources);
@@ -25,8 +24,7 @@ BasicPipeline::~BasicPipeline()
 {
     for (const auto& pipeline : pipelines_) {
         backend_.free(pipeline.batchList);
-        backend_.free(pipeline.renderTarget);
-        backend_.free(pipeline.depthBuffer);
+        backend_.free(pipeline.frameBuffer);
         backend_.free(pipeline.commandBuffer);
     }
 }
@@ -99,21 +97,12 @@ void BasicPipeline::CreateBatchList()
     }
 }
 
-void BasicPipeline::CreateRenderTarget()
+void BasicPipeline::CreateFrameBuffer()
 {
     const auto res = config_.Get<std::vector<std::uint32_t>>("resolution").value();
     for (auto& pipeline : pipelines_) {
-        const tga::TextureInfo textureInfo(res[0], res[1], tga::Format::r32_uint);
-        pipeline.renderTarget = backend_.createTexture(textureInfo);
-    }
-}
-
-void BasicPipeline::CreateDepthBuffer()
-{
-    const auto res = config_.Get<std::vector<std::uint32_t>>("resolution").value();
-    for (auto& pipeline : pipelines_) {
-        const tga::TextureInfo textureInfo(res[0], res[1], tga::Format::r32_uint);
-        pipeline.depthBuffer = backend_.createTexture(textureInfo);
+        const tga::BufferInfo info{tga::BufferUsage::storage, static_cast<size_t>(res[0] * res[1]) * sizeof(uint64_t)};
+        pipeline.frameBuffer = backend_.createBuffer(info);
     }
 }
 
@@ -138,8 +127,8 @@ void BasicPipeline::CreateClearPass(const Resources resources)
                  {tga::BindingType::storageBuffer},
                  {tga::BindingType::storageBuffer},
              }},
-             // Set = 1: RenderTarget, DepthBuffer
-             {{{tga::BindingType::storageImage}, {tga::BindingType::storageImage}}}});
+             // Set = 1: FrameBuffer
+             {{{tga::BindingType::storageBuffer}}}});
 
         const tga::ComputePassInfo passInfo(computeShader, inputLayout);
         clearPass = std::make_unique<TGAComputePass>(backend_, passInfo);
@@ -149,8 +138,7 @@ void BasicPipeline::CreateClearPass(const Resources resources)
             clearPass->BindInput({resource, 0, i});
             ++i;
         }
-        clearPass->BindInput({pipeline.renderTarget, 1, 0});
-        clearPass->BindInput({pipeline.depthBuffer, 1, 1});
+        clearPass->BindInput({pipeline.frameBuffer, 1, 0});
     }
 }
 
@@ -211,8 +199,8 @@ void BasicPipeline::CreateProjectionPass(const Resources resources)
                  {tga::BindingType::storageBuffer},
                  {tga::BindingType::storageBuffer},
              }},
-             // Set = 1: Rendertarget, Depthbuffer
-             {{{tga::BindingType::storageImage}, {tga::BindingType::storageImage}}},
+             // Set = 1: FrameBuffer
+             {{{tga::BindingType::storageBuffer}}},
              // Set = 3: Batch list
              {{{tga::BindingType::storageBuffer}}}});
 
@@ -224,8 +212,7 @@ void BasicPipeline::CreateProjectionPass(const Resources resources)
             projectionPass->BindInput({resource, 0, i});
             ++i;
         }
-        projectionPass->BindInput({pipeline.renderTarget, 1, 0});
-        projectionPass->BindInput({pipeline.depthBuffer, 1, 1});
+        projectionPass->BindInput({pipeline.frameBuffer, 1, 0});
         projectionPass->BindInput({pipeline.batchList, 2, 0});
     }
 }
@@ -254,8 +241,8 @@ void BasicPipeline::CreateDisplayPass(const Resources resources)
                  {tga::BindingType::storageBuffer},
                  {tga::BindingType::storageBuffer},
              }},
-             // Set = 1: RenderTarget
-             {{{tga::BindingType::storageImage}}}});
+             // Set = 1: FrameBuffer
+             {{{tga::BindingType::storageBuffer}}}});
 
         const tga::RenderPassInfo passInfo(vertexShader, fragmentShader, window_, {}, inputLayout,
                                            tga::ClearOperation::none);
@@ -266,6 +253,6 @@ void BasicPipeline::CreateDisplayPass(const Resources resources)
             displayPass->BindInput({resource, 0, i});
             ++i;
         }
-        displayPass->BindInput({pipeline.renderTarget, 1});
+        displayPass->BindInput({pipeline.frameBuffer, 1});
     }
 }
