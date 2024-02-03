@@ -5,7 +5,7 @@
 #include "common.glsl"
 
 layout(set = 1, binding = 0) buffer COMBINED_BUFFER{
-    uint64_t framebuffer[];
+    uint64_t framebuffer[];     // upper 32 bit are depth, lower 32 bit are 8-bit color channels rgba
 };
 
 layout(set = 2, binding = 0) readonly buffer BatchList{
@@ -44,16 +44,20 @@ void main(){
             const vec2 coords = (projected.xy/projected.w * .5f + .5f) * camera.resolution;
             const uint pixelID = getPixelID(camera.resolution, uvec2(coords));
 
-            // depth test via 32-bit-atomicMin
             const uint depth = floatBitsToUint(projected.w);
 
             // create new framebuffer entry with depth in upper bits for comparison
-            const uint64_t framebufferNewEntry = uint64_t(depth) << 32 | pointsRgba[k];
+            uint64_t framebufferNewEntry = uint64_t(depth) << 32;
 
-            /// early depth test
+            // early depth test
             const uint64_t depthFetch = framebuffer[pixelID];
 
             if(framebufferNewEntry < depthFetch){
+
+                // add the color information to entry
+                framebufferNewEntry |= pointsRgba[k];   
+
+                // actual depth test
                 atomicMin(framebuffer[pixelID], framebufferNewEntry);
             }
         }

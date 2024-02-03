@@ -4,7 +4,7 @@
 #include "common.glsl"
 
 layout(set = 1, binding = 0) buffer COMBINED_BUFFER{
-    uint64_t framebuffer[];
+    uint64_t framebuffer[];     // upper 32 bit are depth, lower 32 bit are 8-bit color channels rgba
 };
 
 layout(location = 0) out vec4 color;
