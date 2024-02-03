@@ -1,20 +1,11 @@
 #version 460
+#extension GL_ARB_gpu_shader_int64 : enable
 #extension GL_KHR_vulkan_glsl : enable
+#include "common.glsl"
 
-layout(set = 0, binding = 0) uniform Camera{
-    mat4 view;
-    mat4 projection;
-    vec3 direction;
-    vec3 position;
-    uvec2 resolution;
-}camera;
-
-layout(set = 0, binding = 1) uniform DynamicConst{
-    uint totalBatchCount;
+layout(set = 1, binding = 0) buffer COMBINED_BUFFER{
+    uint64_t framebuffer[];     // upper 32 bit are depth, lower 32 bit are 8-bit color channels rgba
 };
-
-layout(set = 1, binding = 0, r32ui) writeonly uniform uimage2D renderTarget;
-layout(set = 1, binding = 1, r32ui) writeonly uniform uimage2D depthBuffer;
 
 layout(local_size_x = 1024) in;
 
@@ -25,6 +16,7 @@ void main()
         return;
     }
 
-    imageStore(renderTarget, id, uvec4(0));
-    imageStore(depthBuffer, id, uvec4(0xFFFFFFFF)); // depth-test assumes maximum depth in empty depth-buffer for atomic-min-operation
+    const uint pixelID = getPixelID(camera.resolution, id);
+
+    framebuffer[pixelID] = (uint64_t(0xFFFFFFFF) << 32);  // depth-test assumes maximum depth in empty depth-buffer for atomic-min-operation
 }

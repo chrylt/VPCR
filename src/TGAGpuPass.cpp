@@ -4,23 +4,23 @@ TGAGpuPass::TGAGpuPass(tga::Interface& tgai, const std::uint32_t swapCount)
     : backend_(tgai), swapCount_(swapCount), swapIndex_(0), needsRebind_(true)
 {}
 
-void TGAGpuPass::BindInput(
-    const std::variant<tga::Buffer, tga::Texture, tga::ext::TopLevelAccelerationStructure> resource,
-    const std::uint32_t set, const std::uint32_t slot, const std::uint32_t arrayIndex, const std::uint32_t swapIndex)
+void TGAGpuPass::BindInput(const BindingInfo& bindingInfo)
 {
     needsRebind_ = true;
 
     // Check whether we are updating an existing binding
-    for (auto& binding : inputInfos_.at(swapIndex).at(set).bindings) {
-        if ((binding.slot == slot) && (binding.arrayElement == arrayIndex)) {
+    for (auto& binding : inputInfos_.at(bindingInfo.swapIndex).at(bindingInfo.set).bindings) {
+        if ((binding.slot == bindingInfo.slot) && (binding.arrayElement == bindingInfo.arrayIndex)) {
             // Overwrite existing binding
-            binding = {resource, slot, arrayIndex};
+            binding = {bindingInfo.resource, bindingInfo.slot, bindingInfo.arrayIndex};
             return;
         }
     }
 
     // Add new binding
-    inputInfos_.at(swapIndex).at(set).bindings.emplace_back(resource, slot, arrayIndex);
+    inputInfos_.at(bindingInfo.swapIndex)
+        .at(bindingInfo.set)
+        .bindings.emplace_back(bindingInfo.resource, bindingInfo.slot, bindingInfo.arrayIndex);
 }
 
 void TGAGpuPass::Init()
