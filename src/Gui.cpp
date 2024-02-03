@@ -2,6 +2,8 @@
 
 #include <imgui/imgui.h>
 
+#include <vector>
+
 void RenderGui(const Config& config)
 {
     constexpr std::uint32_t settingsWidth = 260;
