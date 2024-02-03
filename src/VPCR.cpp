@@ -1,7 +1,5 @@
 #include "VPCR.h"
 
-#include <math.h>
-
 #include <chrono>
 
 #include "PipelineFactory.h"
@@ -156,12 +154,12 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     backend_.initGUI(window_);
 
     config_.Set("LOD.maxTreeDepth", static_cast<int>(pointCloudAcceleration_->GetMaxTreeDepth()));
-    config_.Set("LOD.maxSelection", std::sqrtf(static_cast<float>(res[0] * res[0] + res[1] * res[1])));
+    config_.Set("LOD.maxSelection", std::sqrt(static_cast<float>(res[0] * res[0] + res[1] * res[1])));
     // We are using the cubic root of the MaxBatchSize as a heuristic for the size of a batch before it loses
     // precision Generally we would like to know the area in pixels of a projected batch that can be coverd by its
     // content before leaving holes
-    config_.Set("LOD.selection", std::cbrtf(MaxBatchSize));
-    config_.Set("LOD.defaultSelection", std::cbrtf(MaxBatchSize));
+    config_.Set("LOD.selection", std::cbrt(static_cast<float>(MaxBatchSize)));
+    config_.Set("LOD.defaultSelection", std::cbrt(static_cast<float>(MaxBatchSize)));
 }
 
 void VPCRImpl::Run()
