@@ -42,7 +42,7 @@ struct HistogramTP{
 };
 
 uint getPixelID(const uvec2 resolution, const uvec2 pixelCoord){
-    return pixelCoord.x * resolution.x + pixelCoord.y;
+    return pixelCoord.x * resolution.y + pixelCoord.y;
 }
 
 uint wang_hash(uint seed)

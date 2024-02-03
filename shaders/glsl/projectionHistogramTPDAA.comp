@@ -64,10 +64,18 @@ void main(){
                 const uint bucketID = getBucketID(storedDepth, pixelSizeInWorldSpace, depth);
                 const uint pixelID = getPixelID(camera.resolution, uvec2(coords));
 
+                uint rgba = pointsRgba[k];
+
+                if((toggleFlags & 1) != 0){
+                    rgba = wang_hash(batchList[id]);
+                }else if((toggleFlags & 2) != 0){
+                    const uint depth = (batch.maskDepthCount >> 8) & 31;
+                    rgba = wang_hash(depth);
+                }
+
                 /// store 32-bit color to 64-bit variable to avoid overflow
                 /// add 8 more bit to each channel
                 /// alpha channel is used as a counter
-                const uint rgba = pointsRgba[k];
                 const uint r = (rgba & 0xFF);
                 const uint g = (rgba >> 8) & 0xFF;
                 const uint b = (rgba >> 16) & 0xFF;

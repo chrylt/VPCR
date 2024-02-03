@@ -14,7 +14,7 @@ public:
     }
 
     template <typename T>
-    void SetDirty(std::string option, T value)
+    void SetDirty(std::string option, T value) const
     {
         dirtyConfig_[option] = std::any(value);
     }
@@ -41,6 +41,6 @@ public:
     }
 
 private:
-    std::unordered_map<std::string, std::any> dirtyConfig_;
+    mutable std::unordered_map<std::string, std::any> dirtyConfig_;
     std::unordered_map<std::string, std::any> config_;
 };
