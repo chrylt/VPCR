@@ -25,8 +25,7 @@ public:
 private:
     struct Pipeline {
         tga::Buffer batchList;
-        tga::Texture renderTarget;
-        tga::Texture depthBuffer;
+        tga::Buffer frameBuffer;
         std::unique_ptr<TGAComputePass> clearPass;
         std::unique_ptr<TGAComputePass> lodPass;
         std::unique_ptr<TGAComputePass> projectionPass;
@@ -35,8 +34,7 @@ private:
     };
 
     void CreateBatchList();
-    void CreateRenderTarget();
-    void CreateDepthBuffer();
+    void CreateFrameBuffer();
 
     void CreateClearPass(Resources resources);
     void CreateLODPass(Resources resources);
