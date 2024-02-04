@@ -6,7 +6,7 @@ TGACamera::TGACamera(tga::Interface& tgai, const std::uint32_t resX, const std::
 {
     cam_.resolution = glm::uvec2(resX, resY);
     constexpr float nearPlane = 0.0001f;
-    constexpr float farPlane = 1000.f;
+    constexpr float farPlane = 1000000.f;
     cam_.fovY = 70.f;
     cam_.projection = glm::perspective_vk(glm::radians(cam_.fovY), static_cast<float>(resX) / static_cast<float>(resY),
                                           nearPlane, farPlane);

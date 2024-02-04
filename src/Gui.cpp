@@ -224,8 +224,8 @@ void RenderGui(const Config& config)
             }
             ImGui::EndDisabled();
 
-            ImGui::BeginDisabled(!preventOverflow || ((currMode != AntiAliasingMode::DensityOnePass) &&
-                                                      (currMode != AntiAliasingMode::DensityTwoPass)));
+            ImGui::BeginDisabled(!preventOverflow.value() || ((currMode != AntiAliasingMode::DensityOnePass) &&
+                                                              (currMode != AntiAliasingMode::DensityTwoPass)));
             auto preventedOverflowVis = config.Get<bool>("AA.preventedOverflowVis");
             if (ImGui::Checkbox("Color Accumulation Overflow\nPrevented", &preventedOverflowVis.value())) {
                 config.SetDirty("AA.preventedOverflowVis", preventedOverflowVis.value());
@@ -263,7 +263,7 @@ void RenderGui(const Config& config)
             }
             ImGui::EndDisabled();
 
-            ImGui::BeginDisabled(currMode != AntiAliasingMode::DensityTwoPass);
+            ImGui::BeginDisabled(!visualizeDensityBuckets.value() || (currMode != AntiAliasingMode::DensityTwoPass));
             auto bucketIDToVis = config.Get<int>("TPDAA.bucketIDToShow");
             ImGui::Text("(TPDAA) Visualize by BucketID");
             if (ImGui::IsItemHovered()) {
