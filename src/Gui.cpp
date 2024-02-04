@@ -30,9 +30,9 @@ void RenderGui(const Config& config)
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
                 "Give each vertex precision a unique color."
-                "\n(OPDAA) Red : Low Precision (10 bit)"
-                "\n(OPDAA) Green: Medium Precision (20 bit)"
-                "\n(OPDAA) Blue: High Precision (30 bit)");
+                "\nRed : Low Precision (10 bit)"
+                "\nGreen: Medium Precision (20 bit)"
+                "\nBlue: High Precision (30 bit)");
         }
 
         ImGui::TreePop();
