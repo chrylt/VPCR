@@ -281,5 +281,16 @@ void RenderGui(const Config& config)
         ImGui::TreePop();
     }
 
+    if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+        auto camSpeed = config.Get<float>("camera.moveSpeed");
+        ImGui::Text("Move Speed");
+        if (ImGui::DragFloat("##Move Speed", &camSpeed.value(), 1.f, 0.f, 10000.f, "%.3f",
+                             ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp)) {
+            config.SetDirty("camera.moveSpeed", camSpeed.value());
+        }
+
+        ImGui::TreePop();
+    }
+
     ImGui::End();
 }
