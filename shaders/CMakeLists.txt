@@ -16,7 +16,7 @@ foreach(GLSL ${GLSL_SHADERS})
     string(REPLACE "." "" FILE_TYPE ${FILE_EXT})
     set(SPIRV "${FILE_NAME}_${FILE_TYPE}.spv")
     add_custom_command( OUTPUT ${SPIRV}
-                        COMMAND ${GLSLC} ${GLSL} -O -o ${SPIRV}
+                        COMMAND ${GLSLC} --target-env=vulkan1.1 ${GLSL} -O -o ${SPIRV}
                         DEPENDS ${GLSL})
     list(APPEND SPIRV_SHADERS ${SPIRV})
 endforeach(GLSL)

@@ -101,6 +101,8 @@ public:
 
     void initGUI(Window window);
 
+    bool isSubgroupPartitionedSupported();
+
     // Freedom
     void free(Shader);
     void free(StagingBuffer);

@@ -4,6 +4,7 @@
 #extension GL_KHR_vulkan_glsl : enable
 #extension GL_KHR_shader_subgroup_clustered : enable
 #extension GL_KHR_shader_subgroup_shuffle : enable
+#extension GL_NV_shader_subgroup_partitioned : enable
 
 #include "common.glsl"
 
@@ -17,19 +18,6 @@ layout(set = 2, binding = 0) readonly buffer BatchList{
 };
 
 layout(local_size_x = 1024) in;
-
-uint subgroupPartitionMin(uint pixelID, uint depth)
-{
-    uint minDepth = depth;
-
-    for (uint i = 0; i < gl_SubgroupSize; i++)
-    {
-        if(pixelID == subgroupShuffle(pixelID, i))
-            minDepth = min(minDepth, subgroupShuffle(depth, i));
-    }
-
-    return minDepth;
-}
 
 void main(){
     drawnBatches = batchCount;
@@ -63,6 +51,7 @@ void main(){
             const uint depth = floatBitsToUint(projected.w);
 
             // test if this thread should update framebuffers
+
             bool threadUpdate = false;
             switch(warpWideDeduplication){
                 case 0:
@@ -79,7 +68,8 @@ void main(){
                 }
                 case 2:
                 {
-                    const uint minDepth = subgroupPartitionMin(pixelID, depth);
+                    const uvec4 mask = subgroupPartitionNV(pixelID);
+                    const uint minDepth = subgroupPartitionedMinNV(depth , mask);
                     threadUpdate = minDepth == depth;
                     break;
                 }
@@ -113,3 +103,4 @@ void main(){
         }
     }
 }
+
