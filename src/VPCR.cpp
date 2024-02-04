@@ -28,7 +28,7 @@ private:
         bool e = false;
     };
 
-    enum WarpWideDedMode : std::uint32_t { None, Pairs, Full, COUNT };
+    enum WarpWideDedMode : std::int32_t { None, Pairs, Full, COUNT };
 
     struct DynamicConst {
         // Misc information we need on gpu
@@ -112,7 +112,6 @@ private:
     std::unique_ptr<IPipeline> pipeline_;
 
     AntiAliasingMode currAntiAliasingMode = AntiAliasingMode::Off;
-    WarpWideDedMode currWarpWideMode = WarpWideDedMode::None;
 
     std::unique_ptr<TGAPointCloudAcceleration> pointCloudAcceleration_;
 };
@@ -165,6 +164,7 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     // content before leaving holes
     config_.Set("LOD.selection", std::cbrt(static_cast<float>(MaxBatchSize)));
     config_.Set("LOD.defaultSelection", std::cbrt(static_cast<float>(MaxBatchSize)));
+    config_.Set("LOD.warpWideDeduplication", 0);
 }
 
 void VPCRImpl::Run()
@@ -195,6 +195,9 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
         dynamicConst_->data.showTreeDepth = config_.Get<int>("LOD.level").value();
         dynamicConst_->data.lodExtend = config_.Get<float>("LOD.selection").value();
         dynamicConst_->data.cullingFovY = config_.Get<float>("LOD.cullingFov").value();
+
+        dynamicConst_->data.warpWideDeduplication =
+            static_cast<WarpWideDedMode>(config_.Get<int>("LOD.warpWideDeduplication").value());
     }
 
     // Toggle Features bases on user input
@@ -245,12 +248,6 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
             }
         }
         keyPressed_.j = backend_.keyDown(window_, tga::Key::J);
-
-        if (keyPressed_.e && !backend_.keyDown(window_, tga::Key::E)) {
-            currWarpWideMode = static_cast<WarpWideDedMode>((currWarpWideMode + 1) % WarpWideDedMode::COUNT);
-            dynamicConst_.get()->data.warpWideDeduplication = currWarpWideMode;
-        }
-        keyPressed_.e = backend_.keyDown(window_, tga::Key::E);
     }
 
     // Print FPS and statistics on window title

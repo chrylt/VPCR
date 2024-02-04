@@ -107,5 +107,39 @@ void RenderGui(const Config& config)
         ImGui::TreePop();
     }
 
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Warp Wide Deduplication", ImGuiTreeNodeFlags_DefaultOpen)) {
+        auto currentWarpWideMode = config.Get<int>("LOD.warpWideDeduplication");
+        if (ImGui::RadioButton("None", &currentWarpWideMode.value(), 0)) {
+            config.SetDirty("LOD.warpWideDeduplication", currentWarpWideMode.value());
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Each thread submit to the framebuffer");
+        }
+        ImGui::SameLine();
+
+        if (ImGui::RadioButton("Pairs", &currentWarpWideMode.value(), 1))
+        {
+            config.SetDirty("LOD.warpWideDeduplication", currentWarpWideMode.value());
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Each pair of threads check together before sumbitting to the framebuffer");
+        }
+        ImGui::SameLine();
+
+        if (ImGui::RadioButton("Full", &currentWarpWideMode.value(), 2))
+        {
+            config.SetDirty("LOD.warpWideDeduplication", currentWarpWideMode.value());
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("The full warp check together before sumbitting to the framebuffer");
+        }
+
+        ImGui::TreePop();
+    }
+
     ImGui::End();
 }
