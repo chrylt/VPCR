@@ -18,7 +18,10 @@ layout(set = 0, binding = 1) uniform DynamicConst{
     int warpWideDeduplication;
     float cullingFovY;
     uint showTreeDepth; // 0 means show all layers
-    uint toggleFlags; // colorBatchById 1, colorTreeByDepth 2, enableFrustumCulling 4, enableLOD 8
+    uint toggleFlags; // colorBatchById 1, colorTreeByDepth 2, enableFrustumCulling 4, enableLOD 8, colorVertexPrecision 16, 
+                      // anti-aliasingErrorCodes 32, preventOverflow 64, preventedOverflowVisualization 128, DensityBucketVis 256
+    uint twoPassDensityBucketVis;   // if toggle flag at DensityBucketVis is true, only render buckets with ID stored here
+    float depthPercTPAA;
 };
 
 layout(set = 0, binding = 2) writeonly buffer Statistics{
@@ -102,4 +105,19 @@ vec3 getAdaptivePointPosition(const vec3 batchBoxSize, const vec3 batchBoxMin, c
     }
 
     return resultPosition;
+}
+
+vec4 getAdaptivePointPrecisionDebugColor(const vec3 batchBoxSize, const vec3 batchBoxMin, const uint batchPixelExtend, const uint pointIdx){
+
+    vec4 resultColor = vec4(1, 0, 0, 1);    /// low precision, if nothing else
+
+    if(batchPixelExtend > 512) { // 2^(10 bits) = 1024 different values; can accurately display BB across 512 pixels
+        resultColor = vec4(0, 1, 0, 1);
+    }
+
+    if(batchPixelExtend > 524288) {  // 2^(20 bits) = 1'048'576 different values; can accurately display BB across 524'288 pixels
+        resultColor = vec4(0, 0, 1, 1);
+    }
+
+    return resultColor;
 }

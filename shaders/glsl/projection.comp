@@ -97,12 +97,14 @@ void main(){
                     // add the color information to entry
                     uint rgba = pointsRgba[k];
 
-                    if((toggleFlags & 1) != 0){
-                        rgba = wang_hash(batchList[id]);
-                    }else if((toggleFlags & 2) != 0){
-                        const uint depth = (batch.maskDepthCount >> 8) & 31;
-                        rgba = wang_hash(depth);
-                    }
+                if((toggleFlags & 1) != 0){
+                    rgba = wang_hash(batchList[id]);
+                }else if((toggleFlags & 2) != 0){
+                    const uint depth = (batch.maskDepthCount >> 8) & 31;
+                    rgba = wang_hash(depth);
+                }else if((toggleFlags & 16) != 0){
+                    rgba = packUnorm4x8(getAdaptivePointPrecisionDebugColor(batchBBSize, vec3(batch.box.minX, batch.box.minY, batch.box.minZ), batchPixelExtend, k));
+                }
 
                     framebufferNewEntry |= rgba;
 

@@ -44,7 +44,15 @@ private:
             std::uint32_t colorTreeByDepth : 1;
             std::uint32_t enableFrustumCulling : 1;
             std::uint32_t enableLOD : 1;
+            std::uint32_t colorVertexPrecision : 1;
+            std::uint32_t AAErrorCodes : 1;
+            std::uint32_t AApreventOverflow : 1;
+            std::uint32_t AApreventedOverflowVis : 1;
+            std::uint32_t DAABucketVis : 1;
+            std::uint32_t padding : 23;
         };  // toggleFlags
+        std::uint32_t TPDAABucketsShowPerID;
+        float depthPercTPAA;
     };
 
     class DynamicConstBuffer : public IPipeline::UploadData {
@@ -80,16 +88,6 @@ private:
         tga::StagingBuffer stagingBuffer_;
     };
 
-    enum AntiAliasingMode : std::uint32_t {
-        Off = 0,
-        TwoPass = 1,
-        DensityOnePass = 2,
-        DensityTwoPass = 3,
-        AA_MODE_COUNT /* always keep this as the last element */
-    };
-    constexpr inline static char const *AntiAliasingModeStrings[AA_MODE_COUNT] = {"OFF", "TWO PASS", "DENSITY",
-                                                                                  "DENSITY TWO PASS"};
-
     void OnUpdate(std::uint32_t frameIndex);
     void OnRender(std::uint32_t frameIndex);
 
@@ -112,9 +110,9 @@ private:
     std::unique_ptr<PipelineFactory> pipelineFactory_;
     std::unique_ptr<IPipeline> pipeline_;
 
-    AntiAliasingMode currAntiAliasingMode = AntiAliasingMode::Off;
-
     std::unique_ptr<TGAPointCloudAcceleration> pointCloudAcceleration_;
+
+    AntiAliasingMode currAntiAliasingMode = AntiAliasingMode::Off;
 };
 
 }  // namespace
@@ -166,7 +164,14 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     config_.Set("LOD.selection", std::cbrt(static_cast<float>(MaxBatchSize)));
     config_.Set("LOD.defaultSelection", std::cbrt(static_cast<float>(MaxBatchSize)));
     config_.Set("LOD.warpWideDeduplication", 0);
-
+    config_.Set("VP.vis", false);
+    config_.Set("AA.currAAMode", AntiAliasingMode::Off);
+    config_.Set("AA.errorShow", false);
+    config_.Set("AA.preventOverflow", true);
+    config_.Set("AA.preventedOverflowVis", false);
+    config_.Set("DAA.visualizeDensityBuckets", false);
+    config_.Set("TPDAA.bucketIDToShow", 0);
+    config_.Set("TPAA.depthPerc", 0.01f);
     config_.Set("TitleBar.update", std::string("0"));
     config_.Set("TitleBar.fps", std::string("0"));
     config_.Set("TitleBar.DrawnBatches", std::string("0"));
@@ -203,15 +208,23 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
         dynamicConst_->data.showTreeDepth = config_.Get<int>("LOD.level").value();
         dynamicConst_->data.lodExtend = config_.Get<float>("LOD.selection").value();
         dynamicConst_->data.cullingFovY = config_.Get<float>("LOD.cullingFov").value();
-
         dynamicConst_->data.warpWideDeduplication =
             static_cast<WarpWideDedMode>(config_.Get<int>("LOD.warpWideDeduplication").value());
+        dynamicConst_->data.colorVertexPrecision = config_.Get<bool>("VP.vis").value();
+        dynamicConst_->data.AAErrorCodes = config_.Get<bool>("AA.errorShow").value();
+        dynamicConst_->data.AApreventOverflow = config_.Get<bool>("AA.preventOverflow").value();
+        dynamicConst_->data.AApreventedOverflowVis = config_.Get<bool>("AA.preventedOverflowVis").value();
+        dynamicConst_->data.DAABucketVis = config_.Get<bool>("DAA.visualizeDensityBuckets").value();
+        dynamicConst_->data.TPDAABucketsShowPerID = config_.Get<int>("TPDAA.bucketIDToShow").value();
+        dynamicConst_->data.depthStepSize = config_.Get<float>("OPDAA.bucketSize").value();
+        dynamicConst_->data.depthPercTPAA = config_.Get<float>("TPAA.depthPerc").value();
     }
 
     // Toggle Features bases on user input
     {
-        if (keyPressed_.j && !backend_.keyDown(window_, tga::Key::J)) {
-            currAntiAliasingMode = static_cast<AntiAliasingMode>((currAntiAliasingMode + 1) % AA_MODE_COUNT);
+        const auto configAntiAliasingMode = config_.Get<AntiAliasingMode>("AA.currAAMode").value();
+        if (currAntiAliasingMode != configAntiAliasingMode) {
+            currAntiAliasingMode = configAntiAliasingMode;
             const auto [low, medium, high, color] = pointCloudAcceleration_->GetPointsBufferPack();
             switch (currAntiAliasingMode) {
                 case AntiAliasingMode::Off: {
@@ -255,7 +268,6 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
                 }
             }
         }
-        keyPressed_.j = backend_.keyDown(window_, tga::Key::J);
     }
 
     // Print FPS and statistics on window title
@@ -333,8 +345,10 @@ void VPCRImpl::OnRender(std::uint32_t frameIndex)
 VPCRImpl::DynamicConstBuffer::DynamicConstBuffer(tga::Interface& backend, const std::uint32_t batchCount)
     : backend_(backend)
 {
-    data.depthStepSize = (1000.0f / static_cast<float>(std::numeric_limits<int>::max())) * 10'000;
-    data.totalBatchCount = batchCount;
+    // We are using the cubic root of the MaxBatchSize as a heuristic for the size of a batch before it loses
+    // precision Generally we would like to know the area in pixels of a projected batch that can be coverd by its
+    // content before leaving holes
+    data = {batchCount, 0.1f, std::cbrtf(MaxBatchSize)};
 
     const tga::StagingBufferInfo stagingInfo{sizeof(data), reinterpret_cast<const std::uint8_t *>(&data)};
     const auto staging = backend_.createStagingBuffer(stagingInfo);

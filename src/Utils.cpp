@@ -18,7 +18,17 @@ tinygltf::Model LoadModel(const std::string_view filename)
     std::string err;
     std::string warn;
 
-    const auto res = loader.LoadASCIIFromFile(&model, &err, &warn, filename.data());
+    const auto fileExtension = std::filesystem::path(filename).extension();
+
+    bool res = false;
+    if (fileExtension == ".gltf") {
+        res = loader.LoadASCIIFromFile(&model, &err, &warn, filename.data()); 
+    } else if (fileExtension == ".glb") {
+        res = loader.LoadBinaryFromFile(&model, &err, &warn, filename.data());
+    } else {
+        throw std::runtime_error("File formate not supported");
+    }
+
     if (!res) {
         throw std::runtime_error("Failed to load glTF");
     }
@@ -43,9 +53,11 @@ std::vector<Point> LoadScenePoints(const std::string_view scene)
     auto modelMatrix = glm::mat4(1.0);
     if (!model.nodes.empty()) {
         const auto& matrix = model.nodes[0].matrix;
-        modelMatrix =
-            glm::mat4(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5], matrix[6], matrix[7], matrix[8],
-                      matrix[9], matrix[10], matrix[11], matrix[12], matrix[13], matrix[14], matrix[15]);
+        if (!matrix.empty()) {
+            modelMatrix =
+                glm::mat4(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5], matrix[6], matrix[7],
+                          matrix[8], matrix[9], matrix[10], matrix[11], matrix[12], matrix[13], matrix[14], matrix[15]);
+        }
     }
 
     std::size_t totalPointCount = 0;

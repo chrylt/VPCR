@@ -4,6 +4,8 @@
 
 #include <vector>
 
+#include "Utils.h"
+
 void RenderGui(const Config& config)
 {
     ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -33,6 +35,17 @@ void RenderGui(const Config& config)
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Give each batch a unique color.");
+        }
+        auto vertexPrecisionVis = config.Get<bool>("VP.vis");
+        if (ImGui::Checkbox("Color by Vertex Precision", &vertexPrecisionVis.value())) {
+            config.SetDirty("VP.vis", vertexPrecisionVis.value());
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Give each vertex precision a unique color."
+                "\nRed : Low Precision (10 bit)"
+                "\nGreen: Medium Precision (20 bit)"
+                "\nBlue: High Precision (30 bit)");
         }
 
         ImGui::TreePop();
@@ -134,8 +147,7 @@ void RenderGui(const Config& config)
         }
         ImGui::SameLine();
 
-        if (ImGui::RadioButton("Pairs", &currentWarpWideMode.value(), 1))
-        {
+        if (ImGui::RadioButton("Pairs", &currentWarpWideMode.value(), 1)) {
             config.SetDirty("LOD.warpWideDeduplication", currentWarpWideMode.value());
         }
         if (ImGui::IsItemHovered()) {
@@ -143,12 +155,99 @@ void RenderGui(const Config& config)
         }
         ImGui::SameLine();
 
-        if (ImGui::RadioButton("Full", &currentWarpWideMode.value(), 2))
-        {
+        if (ImGui::RadioButton("Full", &currentWarpWideMode.value(), 2)) {
             config.SetDirty("LOD.warpWideDeduplication", currentWarpWideMode.value());
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("The full warp check together before sumbitting to the framebuffer");
+        }
+
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Anti-Aliasing", ImGuiTreeNodeFlags_DefaultOpen)) {
+        static const char *items[]{"None", "Two-Pass Percentage", "One-Pass Density", "Two-Pass Density"};
+        int currMode = config.Get<AntiAliasingMode>("AA.currAAMode").value();
+        if (ImGui::Combo("##Anti-Aliasing Mode", &currMode, items, IM_ARRAYSIZE(items))) {
+            config.SetDirty("AA.currAAMode", static_cast<AntiAliasingMode>(currMode));
+        }
+
+        auto errorShow = config.Get<bool>("AA.errorShow");
+        if (ImGui::Checkbox("Show Error Color", &errorShow.value())) {
+            config.SetDirty("AA.errorShow", errorShow.value());
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Colors areas according to error codes. "
+                "\nMagenta: Color Accumulation Overflow"
+                "\n(OPDAA) Red: Failed Insert, but reached End of Linked List"
+                "\n(OPDAA) Green: Linked List Insert Timeout"
+                "\n(OPDAA) Blue: Filled Bucket Count at Limit");
+        }
+
+        auto preventedOverflowVis = config.Get<bool>("AA.preventedOverflowVis");
+        if (ImGui::Checkbox("Color Accumulation Overflow", &preventedOverflowVis.value())) {
+            config.SetDirty("AA.preventedOverflowVis", preventedOverflowVis.value());
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Visualizes accumulation overflow prevention.");
+        }
+
+        auto depthPerc = config.Get<float>("TPAA.depthPerc");
+        ImGui::Text("(TPAA) Depth Percentage");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Points chosen for accumulation have to be within the range of this depth percentage.");
+        }
+        if (ImGui::SliderFloat("##(TPAA) Depth Percentage for Accumulation", &depthPerc.value(), 0, 1, "%.5f",
+                               ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic)) {
+            config.SetDirty("TPAA.depthPerc", depthPerc.value());
+        }
+
+        if (ImGui::TreeNodeEx("Density-Based Methods", ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto preventOverflow = config.Get<bool>("AA.preventOverflow");
+            if (ImGui::Checkbox("Enable Overflow Prevention of Accumulation", &preventOverflow.value())) {
+                config.SetDirty("AA.preventOverflow", preventOverflow.value());
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Toggles accumulation overflow prevention by discarding buckets.");
+            }
+
+            auto visualizeDensityBuckets = config.Get<bool>("DAA.visualizeDensityBuckets");
+            if (ImGui::Checkbox("Visualize Histogram Buckets", &visualizeDensityBuckets.value())) {
+                config.SetDirty("DAA.visualizeDensityBuckets", visualizeDensityBuckets.value());
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Visualizes buckets of the histogram.\n(OPDAA) Randomly assigns color to bucketID\n(TPDAA) Only "
+                    "renders points in bucket specified by bucketID below.");
+            }
+
+            auto bucketSize = config.Get<float>("OPDAA.bucketSize");
+            ImGui::Text("(OPDAA) Set Bucket Size");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Set the world space bucket size for the one-pass density-based anti-aliasing approach.");
+            }
+            if (ImGui::SliderFloat("##(OPDAA) Set Bucket Size", &bucketSize.value(), 0.0000001, 0.01, "%.10f",
+                                   ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic)) {
+                config.SetDirty("OPDAA.bucketSize", bucketSize.value());
+            }
+
+            auto bucketIDToVis = config.Get<int>("TPDAA.bucketIDToShow");
+            ImGui::Text("(TPDAA) Visualize by BucketID");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Only render the buckets that correspond to the selected bucketID");
+            }
+            if (ImGui::SliderInt("##Visualize by BucketID", &bucketIDToVis.value(), 0, BUCKET_COUNT_TPDAA - 1, "%d",
+                                 ImGuiSliderFlags_AlwaysClamp)) {
+                config.SetDirty("TPDAA.bucketIDToShow", bucketIDToVis.value());
+            }
+
+            ImGui::TreePop();
         }
 
         ImGui::TreePop();
