@@ -257,7 +257,7 @@ void RenderGui(const Config& config)
                 ImGui::SetTooltip(
                     "Set the world space bucket size for the one-pass density-based anti-aliasing approach.");
             }
-            if (ImGui::SliderFloat("##(OPDAA) Set Bucket Size", &bucketSize.value(), 0.0000001f, 0.01f, "%.10f",
+            if (ImGui::SliderFloat("##(OPDAA) Set Bucket Size", &bucketSize.value(), 0.00001f, 20.f, "%.10f",
                                    ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic)) {
                 config.SetDirty("OPDAA.bucketSize", bucketSize.value());
             }

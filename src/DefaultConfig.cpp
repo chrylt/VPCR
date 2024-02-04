@@ -31,8 +31,8 @@ Config GetDefaultConfig()
     config.Set("AA.preventedOverflowVis", false);
     config.Set("DAA.visualizeDensityBuckets", false);
     config.Set("TPDAA.bucketIDToShow", 0);
-    config.Set("OPDAA.bucketSize", (1000.0f / static_cast<float>(std::numeric_limits<int>::max())) * 100);
-    config.Set("TPAA.depthPerc", 0.01);
+    config.Set("OPDAA.bucketSize", 0.0003f);
+    config.Set("TPAA.depthPerc", 0.01f);
 
     return config;
 }
