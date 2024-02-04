@@ -7,15 +7,14 @@
 void RenderGui(const Config& config)
 {
     ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowBgAlpha(0.5f);
+    ImGui::SetNextWindowBgAlpha(0.7f);
     ImGui::Begin("State", nullptr,
-                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoTitleBar);
-
-    ImGui::Text("Frame rate: %s FPS", config.Get<std::string>("TitleBar.fps"));
-    ImGui::Text("Batches   : %s/%s", config.Get<std::string>("TitleBar.DrawnBatches"),
-                config.Get<std::string>("TitleBar.TotalBatches"));
-    ImGui::Text("Anti-Aliasing-Mode: %s", config.Get<std::string>("TitleBar.AAMode"));
-    ImGui::Text("Warp-Wide-Deduplication-Mode: %s", config.Get<std::string>("TitleBar.dedMode"));
+                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoTitleBar);
+    ImGui::Text("Frame rate: %s FPS", config.Get<std::string>("TitleBar.fps").value().c_str());
+    ImGui::Text("Batches   : %s/%s", config.Get<std::string>("TitleBar.DrawnBatches").value().c_str(),
+                config.Get<std::string>("TitleBar.TotalBatches").value().c_str());
+    ImGui::Text("Anti-Aliasing-Mode: %s", config.Get<std::string>("TitleBar.AAMode").value().c_str());
+    ImGui::Text("Warp-Wide-Deduplication-Mode: %s", config.Get<std::string>("TitleBar.dedMode").value().c_str());
 
     ImGui::End();
 
