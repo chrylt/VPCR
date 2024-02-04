@@ -18,7 +18,17 @@ tinygltf::Model LoadModel(const std::string_view filename)
     std::string err;
     std::string warn;
 
-    const auto res = loader.LoadASCIIFromFile(&model, &err, &warn, filename.data());
+    const auto fileExtension = std::filesystem::path(filename).extension();
+
+    bool res = false;
+    if (fileExtension == ".gltf") {
+        res = loader.LoadASCIIFromFile(&model, &err, &warn, filename.data()); 
+    } else if (fileExtension == ".glb") {
+        res = loader.LoadBinaryFromFile(&model, &err, &warn, filename.data());
+    } else {
+        throw std::runtime_error("File formate not supported");
+    }
+
     if (!res) {
         throw std::runtime_error("Failed to load glTF");
     }
