@@ -6,6 +6,19 @@
 
 void RenderGui(const Config& config)
 {
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowBgAlpha(0.5f);
+    ImGui::Begin("State", nullptr,
+                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoTitleBar);
+
+    ImGui::Text("Frame rate: %s FPS", config.Get<std::string>("TitleBar.fps"));
+    ImGui::Text("Batches   : %s/%s", config.Get<std::string>("TitleBar.DrawnBatches"),
+                config.Get<std::string>("TitleBar.TotalBatches"));
+    ImGui::Text("Anti-Aliasing-Mode: %s", config.Get<std::string>("TitleBar.AAMode"));
+    ImGui::Text("Warp-Wide-Deduplication-Mode: %s", config.Get<std::string>("TitleBar.dedMode"));
+
+    ImGui::End();
+
     constexpr std::uint32_t settingsWidth = 260;
     const auto res = config.Get<std::vector<std::uint32_t>>("resolution").value();
     ImGui::SetNextWindowPos(ImVec2(static_cast<float>(res[0]) - settingsWidth, 0));
@@ -13,16 +26,6 @@ void RenderGui(const Config& config)
 
     ImGui::Begin("Settings", nullptr,
                  ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoMove);
-    
-    ImGui::Text("Frame rate: %s FPS", config.Get<std::string>("TitleBar.fps"));
-    ImGui::Text("Batches   : %s/%s", config.Get<std::string>("TitleBar.DrawnBatches"),
-                config.Get<std::string>("TitleBar.TotalBatches"));
-    ImGui::Text("Anti-Aliasing-Mode: %s", config.Get<std::string>("TitleBar.AAMode"));
-    ImGui::Text("Warp-Wide-Deduplication-Mode: %s", config.Get<std::string>("TitleBar.dedMode"));
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
 
     if (ImGui::TreeNodeEx("General", ImGuiTreeNodeFlags_DefaultOpen)) {
         auto colorBatch = config.Get<bool>("LOD.colorBatch");
