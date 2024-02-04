@@ -28,7 +28,8 @@ private:
         bool e = false;
     };
 
-    enum WarpWideDedMode : std::int32_t { None, Pairs, Full, COUNT };
+    enum WarpWideDedMode : std::int32_t { None, Pairs, Full, WARPWIDE_MODE_COUNT };
+    constexpr inline static char const *warpWideDedModeStrings[WARPWIDE_MODE_COUNT] = {"NONE", "PAIRS", "FULL"};
 
     struct DynamicConst {
         // Misc information we need on gpu
@@ -136,7 +137,7 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
 
     // Create Window
     window_ = backend_.createWindow({res[0], res[1]});
-    backend_.setWindowTitle(window_, "TGA Vulkan RayTracer");
+    backend_.setWindowTitle(window_, "Vulkan Point Cloud Renderer");
 
     // Create Resources
     pointCloudAcceleration_ = std::make_unique<TGAPointCloudAcceleration>(backend_, scenePath.value());
@@ -165,6 +166,13 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     config_.Set("LOD.selection", std::cbrt(static_cast<float>(MaxBatchSize)));
     config_.Set("LOD.defaultSelection", std::cbrt(static_cast<float>(MaxBatchSize)));
     config_.Set("LOD.warpWideDeduplication", 0);
+
+    config_.Set("TitleBar.update", std::string("0"));
+    config_.Set("TitleBar.fps", std::string("0"));
+    config_.Set("TitleBar.DrawnBatches", std::string("0"));
+    config_.Set("TitleBar.TotalBatches", std::string("0"));
+    config_.Set("TitleBar.AAMode", std::string("0"));
+    config_.Set("TitleBar.dedMode", std::string("0"));
 }
 
 void VPCRImpl::Run()
@@ -254,12 +262,12 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
     {
         if ((currentTime - lastTitleUpdate_).count() / 1000000000.f >= 1.f) {
             lastTitleUpdate_ = std::chrono::high_resolution_clock::now();
-
-            backend_.setWindowTitle(window_,
-                                    "VPCR, Frame rate: " + std::to_string(frameCounter_) +
-                                        " FPS, Drawn batches: " + std::to_string(statistics_->data.drawnBatches) + "/" +
-                                        std::to_string(pointCloudAcceleration_->GetBatchCount()) +
-                                        ", Anti-Aliasing-Mode: " + AntiAliasingModeStrings[currAntiAliasingMode]);
+            config_.Set("TitleBar.fps", std::to_string(frameCounter_));
+            config_.Set("TitleBar.DrawnBatches", std::to_string(statistics_->data.drawnBatches));
+            config_.Set("TitleBar.TotalBatches", std::to_string(pointCloudAcceleration_->GetBatchCount()));
+            config_.Set("TitleBar.AAMode", std::string(AntiAliasingModeStrings[currAntiAliasingMode]));
+            config_.Set("TitleBar.dedMode",
+                        std::string(warpWideDedModeStrings[config_.Get<int>("LOD.warpWideDeduplication").value()]));
             frameCounter_ = 0;
         }
     }
