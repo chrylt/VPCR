@@ -15,6 +15,7 @@ layout(set = 0, binding = 1) uniform DynamicConst{
     uint totalBatchCount;
     float depthStepSize;
     float lodExtend;
+    int warpWideDeduplication;
     float cullingFovY;
     uint showTreeDepth; // 0 means show all layers
     uint toggleFlags; // colorBatchById 1, colorTreeByDepth 2, enableFrustumCulling 4, enableLOD 8, colorVertexPrecision 16, 

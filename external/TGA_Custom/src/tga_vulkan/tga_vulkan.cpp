@@ -221,30 +221,33 @@ namespace /*init vulkan objects*/
         vk::PhysicalDeviceFeatures2 features;
         vk::PhysicalDeviceVulkan11Features features_11;
         vk::PhysicalDeviceVulkan12Features features_12;
-        vk::PhysicalDeviceRayQueryFeaturesKHR rayQueryFeature;
-        vk::PhysicalDeviceAccelerationStructureFeaturesKHR asFeature;
+        vk::PhysicalDeviceSubgroupSizeControlFeatures subgroupControlFeature;
+
         features.pNext = &features_11;
         features_11.pNext = &features_12;
-        features_12.pNext = &asFeature;
-        asFeature.pNext = &rayQueryFeature;
+        features_12.pNext = &subgroupControlFeature;
         gpu.getFeatures2(&features);
 
-        auto extensions = [](bool withRayQuerySupport) -> std::vector<const char *> {
-            if (!withRayQuerySupport)
-                return {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+        vk::PhysicalDeviceProperties2 properties;
+        vk::PhysicalDeviceSubgroupProperties subgroupProperties;
+
+        properties.pNext = &subgroupProperties;
+        gpu.getProperties2(&properties);
+
+        auto extensions = [](bool withSubgroupPartitionedSupport) -> std::vector<const char *> {
+            if (!withSubgroupPartitionedSupport)
+                return {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME};
             else
-                return {VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                        // Ray Query Extension
-                        VK_KHR_RAY_QUERY_EXTENSION_NAME, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-                        // Required by VK_KHR_acceleration_structure
-                        VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-                        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-                        // Required for ray queries
-                        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
-                        // Required by VK_KHR_spirv_1_4
-                        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME};
-        }(rayQueryFeature.rayQuery);
-        if (rayQueryFeature.rayQuery) std::cout << "Vulkan RayQuery extension enabled\n";
+                return {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME,
+                        VK_NV_SHADER_SUBGROUP_PARTITIONED_EXTENSION_NAME};
+        }((subgroupProperties.supportedOperations & vk::SubgroupFeatureFlagBits::ePartitionedNV) ==
+                                                                  vk::SubgroupFeatureFlagBits::ePartitionedNV);
+        if ((subgroupProperties.supportedOperations & vk::SubgroupFeatureFlagBits::ePartitionedNV) ==
+            vk::SubgroupFeatureFlagBits::ePartitionedNV) {
+            std::cout << "Vulkan Subgroup Partitioned extension enabled\n";
+        } else {
+            std::cout << "Vulkan Subgroup Partitioned extension not availble\n";
+        }
 
 #ifdef __APPLE_
         extensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
@@ -1029,11 +1032,14 @@ ComputePass Interface::createComputePass(ComputePassInfo const& computePassInfo)
 
     auto pipelineLayout = device.createPipelineLayout({{}, descriptorSetLayouts});
 
+    auto requiredSubgroupSize =
+        vk::PipelineShaderStageRequiredSubgroupSizeCreateInfo(computePassInfo.requiredSubgroupSize);
     auto pipeline =
         device
             .createComputePipeline({}, {{},
-                                        vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eCompute,
-                                                                          computeShaderModule, "main"),
+                                        vk::PipelineShaderStageCreateInfo(
+                                            {}, vk::ShaderStageFlagBits::eCompute, computeShaderModule, "main", 0,
+                                            computePassInfo.requiredSubgroupSize ? &requiredSubgroupSize : 0),
                                         pipelineLayout})
             .value;
 
@@ -1527,6 +1533,18 @@ void Interface::guiEndFrame(CommandBuffer cmdBuffer)
 
     ImGui::Render();
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdData.cmdBuffer, VK_NULL_HANDLE);
+}
+
+bool Interface::isSubgroupPartitionedSupported()
+{
+    vk::PhysicalDeviceProperties2 properties;
+    vk::PhysicalDeviceSubgroupProperties subgroupProperties;
+
+    properties.pNext = &subgroupProperties;
+    state.get()->pDevice.getProperties2(&properties);
+
+    return (subgroupProperties.supportedOperations & vk::SubgroupFeatureFlagBits::ePartitionedNV) ==
+           vk::SubgroupFeatureFlagBits::ePartitionedNV;
 }
 
 void Interface::free(Shader shader)

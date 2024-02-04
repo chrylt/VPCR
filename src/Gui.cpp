@@ -28,10 +28,11 @@ void RenderGui(const Config& config)
             config.SetDirty("VP.vis", vertexPrecisionVis.value());
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Give each vertex precision a unique color."
-                                "\n(OPDAA) Red : Low Precision (10 bit)"
-                                "\n(OPDAA) Green: Medium Precision (20 bit)"
-                                "\n(OPDAA) Blue: High Precision (30 bit)");
+            ImGui::SetTooltip(
+                "Give each vertex precision a unique color."
+                "\n(OPDAA) Red : Low Precision (10 bit)"
+                "\n(OPDAA) Green: Medium Precision (20 bit)"
+                "\n(OPDAA) Blue: High Precision (30 bit)");
         }
 
         ImGui::TreePop();
@@ -123,6 +124,38 @@ void RenderGui(const Config& config)
     ImGui::Separator();
     ImGui::Spacing();
 
+    if (ImGui::TreeNodeEx("Warp Wide Deduplication", ImGuiTreeNodeFlags_DefaultOpen)) {
+        auto currentWarpWideMode = config.Get<int>("LOD.warpWideDeduplication");
+        if (ImGui::RadioButton("None", &currentWarpWideMode.value(), 0)) {
+            config.SetDirty("LOD.warpWideDeduplication", currentWarpWideMode.value());
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Each thread submit to the framebuffer");
+        }
+        ImGui::SameLine();
+
+        if (ImGui::RadioButton("Pairs", &currentWarpWideMode.value(), 1)) {
+            config.SetDirty("LOD.warpWideDeduplication", currentWarpWideMode.value());
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Each pair of threads check together before sumbitting to the framebuffer");
+        }
+        ImGui::SameLine();
+
+        if (ImGui::RadioButton("Full", &currentWarpWideMode.value(), 2)) {
+            config.SetDirty("LOD.warpWideDeduplication", currentWarpWideMode.value());
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("The full warp check together before sumbitting to the framebuffer");
+        }
+
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
     if (ImGui::TreeNodeEx("Anti-Aliasing", ImGuiTreeNodeFlags_DefaultOpen)) {
         static const char *items[]{"None", "Two-Pass Percentage", "One-Pass Density", "Two-Pass Density"};
         int currMode = config.Get<AntiAliasingMode>("AA.currAAMode").value();
@@ -144,8 +177,7 @@ void RenderGui(const Config& config)
         }
 
         auto preventedOverflowVis = config.Get<bool>("AA.preventedOverflowVis");
-        if (ImGui::Checkbox("Color Accumulation Overflow",
-                            &preventedOverflowVis.value())) {
+        if (ImGui::Checkbox("Color Accumulation Overflow", &preventedOverflowVis.value())) {
             config.SetDirty("AA.preventedOverflowVis", preventedOverflowVis.value());
         }
         if (ImGui::IsItemHovered()) {
@@ -153,7 +185,6 @@ void RenderGui(const Config& config)
         }
 
         if (ImGui::TreeNodeEx("Density-Based Methods", ImGuiTreeNodeFlags_DefaultOpen)) {
-
             auto preventOverflow = config.Get<bool>("AA.preventOverflow");
             if (ImGui::Checkbox("Enable Overflow Prevention of Accumulation", &preventOverflow.value())) {
                 config.SetDirty("AA.preventOverflow", preventOverflow.value());
@@ -163,12 +194,13 @@ void RenderGui(const Config& config)
             }
 
             auto visualizeDensityBuckets = config.Get<bool>("DAA.visualizeDensityBuckets");
-            if (ImGui::Checkbox("Visualize Histogram Buckets",
-                                &visualizeDensityBuckets.value())) {
+            if (ImGui::Checkbox("Visualize Histogram Buckets", &visualizeDensityBuckets.value())) {
                 config.SetDirty("DAA.visualizeDensityBuckets", visualizeDensityBuckets.value());
             }
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Visualizes buckets of the histogram.\n(OPDAA) Randomly assigns color to bucketID\n(TPDAA) Only renders points in bucket specified by bucketID below.");
+                ImGui::SetTooltip(
+                    "Visualizes buckets of the histogram.\n(OPDAA) Randomly assigns color to bucketID\n(TPDAA) Only "
+                    "renders points in bucket specified by bucketID below.");
             }
 
             auto bucketSize = config.Get<float>("OPDAA.bucketSize");
@@ -187,8 +219,7 @@ void RenderGui(const Config& config)
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Only render the buckets that correspond to the selected bucketID");
             }
-            if (ImGui::SliderInt("##Visualize by BucketID", &bucketIDToVis.value(), 0,
-                                 BUCKET_COUNT_TPDAA - 1, "%d",
+            if (ImGui::SliderInt("##Visualize by BucketID", &bucketIDToVis.value(), 0, BUCKET_COUNT_TPDAA - 1, "%d",
                                  ImGuiSliderFlags_AlwaysClamp)) {
                 config.SetDirty("TPDAA.bucketIDToShow", bucketIDToVis.value());
             }
