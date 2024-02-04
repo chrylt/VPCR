@@ -1,4 +1,5 @@
-![image](https://github.com/chrylt/VPCR/assets/40664049/599784b8-4d95-418a-8b36-2bff246cab0c)
+![image](https://github.com/chrylt/VPCR/assets/33519687/ab812c31-c774-474b-b594-ab8c79b4875c)
+
 
 # Vulkan Point Cloud Renderer (VPCR)
 
