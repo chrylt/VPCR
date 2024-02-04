@@ -18,7 +18,7 @@ tinygltf::Model LoadModel(const std::string_view filename)
     std::string err;
     std::string warn;
 
-    const auto fileExtension = std::string(strrchr(filename.data(), '.'));
+    const auto fileExtension = std::filesystem::path(filename).extension();
 
     bool res = false;
     if (fileExtension == ".gltf") {
