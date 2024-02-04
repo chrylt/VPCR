@@ -65,6 +65,7 @@ void RenderGui(const Config& config)
             ImGui::SetTooltip("Enables frustum culling which uses spheres which are set around batches.");
         }
 
+        ImGui::BeginDisabled(!cullingEnabled.value());
         auto currentCullingFov = config.Get<float>("LOD.cullingFov");
         const auto maxCullingFov = config.Get<float>("LOD.defaultCullingFov");
         ImGui::Text("Culling FOV");
@@ -79,6 +80,7 @@ void RenderGui(const Config& config)
         if (ImGui::Button("Reset Culling FOV")) {
             config.SetDirty("LOD.cullingFov", config.Get<float>("LOD.defaultCullingFov").value());
         }
+        ImGui::EndDisabled();
 
         ImGui::TreePop();
     }
@@ -183,7 +185,7 @@ void RenderGui(const Config& config)
             config.SetDirty("AA.currAAMode", static_cast<AntiAliasingMode>(currMode));
         }
 
-        ImGui::BeginDisabled(currMode != AntiAliasingMode::DensityOnePass);
+        ImGui::BeginDisabled(currMode == AntiAliasingMode::Off);
         auto errorShow = config.Get<bool>("AA.errorShow");
         if (ImGui::Checkbox("Show Error Color", &errorShow.value())) {
             config.SetDirty("AA.errorShow", errorShow.value());
@@ -195,16 +197,6 @@ void RenderGui(const Config& config)
                 "\n(OPDAA) Red: Failed Insert, but reached End of Linked List"
                 "\n(OPDAA) Green: Linked List Insert Timeout"
                 "\n(OPDAA) Blue: Filled Bucket Count at Limit");
-        }
-        ImGui::EndDisabled();
-
-        ImGui::BeginDisabled(currMode == AntiAliasingMode::Off);
-        auto preventedOverflowVis = config.Get<bool>("AA.preventedOverflowVis");
-        if (ImGui::Checkbox("Color Accumulation Overflow", &preventedOverflowVis.value())) {
-            config.SetDirty("AA.preventedOverflowVis", preventedOverflowVis.value());
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Visualizes accumulation overflow prevention.");
         }
         ImGui::EndDisabled();
 
@@ -221,13 +213,25 @@ void RenderGui(const Config& config)
         ImGui::EndDisabled();
 
         if (ImGui::TreeNodeEx("Density-Based Methods", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::BeginDisabled(currMode == AntiAliasingMode::Off);
+            ImGui::BeginDisabled((currMode != AntiAliasingMode::DensityOnePass) &&
+                                 (currMode != AntiAliasingMode::DensityTwoPass));
             auto preventOverflow = config.Get<bool>("AA.preventOverflow");
             if (ImGui::Checkbox("Enable Overflow Prevention\nof Accumulation", &preventOverflow.value())) {
                 config.SetDirty("AA.preventOverflow", preventOverflow.value());
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Toggles accumulation overflow prevention by discarding buckets.");
+            }
+            ImGui::EndDisabled();
+
+            ImGui::BeginDisabled(!preventOverflow || ((currMode != AntiAliasingMode::DensityOnePass) &&
+                                                      (currMode != AntiAliasingMode::DensityTwoPass)));
+            auto preventedOverflowVis = config.Get<bool>("AA.preventedOverflowVis");
+            if (ImGui::Checkbox("Color Accumulation Overflow\nPrevented", &preventedOverflowVis.value())) {
+                config.SetDirty("AA.preventedOverflowVis", preventedOverflowVis.value());
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Visualizes accumulation overflow prevention.");
             }
             ImGui::EndDisabled();
 
