@@ -21,6 +21,7 @@ layout(set = 0, binding = 1) uniform DynamicConst{
     uint toggleFlags; // colorBatchById 1, colorTreeByDepth 2, enableFrustumCulling 4, enableLOD 8, colorVertexPrecision 16, 
                       // anti-aliasingErrorCodes 32, preventOverflow 64, preventedOverflowVisualization 128, DensityBucketVis 256
     uint twoPassDensityBucketVis;   // if toggle flag at DensityBucketVis is true, only render buckets with ID stored here
+    float depthPercTPAA;
 };
 
 layout(set = 0, binding = 2) writeonly buffer Statistics{

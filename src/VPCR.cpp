@@ -51,6 +51,7 @@ private:
             std::uint32_t padding : 23;
         };  // toggleFlags
         std::uint32_t TPDAABucketsShowPerID;
+        float depthPercTPAA;
     };
 
     class DynamicConstBuffer : public IPipeline::UploadData {
@@ -169,6 +170,7 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     config_.Set("AA.preventedOverflowVis", false);
     config_.Set("DAA.visualizeDensityBuckets", false);
     config_.Set("TPDAA.bucketIDToShow", 0);
+    config_.Set("TPAA.depthPerc", 0.01f);
 }
 
 void VPCRImpl::Run()
@@ -208,6 +210,7 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
         dynamicConst_->data.DAABucketVis = config_.Get<bool>("DAA.visualizeDensityBuckets").value();
         dynamicConst_->data.TPDAABucketsShowPerID = config_.Get<int>("TPDAA.bucketIDToShow").value();
         dynamicConst_->data.depthStepSize = config_.Get<float>("OPDAA.bucketSize").value();
+        dynamicConst_->data.depthPercTPAA = config_.Get<float>("TPAA.depthPerc").value();
     }
 
     // Toggle Features bases on user input

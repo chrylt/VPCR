@@ -32,6 +32,7 @@ Config GetDefaultConfig()
     config.Set("DAA.visualizeDensityBuckets", false);
     config.Set("TPDAA.bucketIDToShow", 0);
     config.Set("OPDAA.bucketSize", (1000.0f / static_cast<float>(std::numeric_limits<int>::max())) * 100);
+    config.Set("TPAA.depthPerc", 0.01);
 
     return config;
 }

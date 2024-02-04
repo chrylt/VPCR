@@ -50,7 +50,7 @@ void main(){
 
             const float storedDepth = uintBitsToFloat(imageLoad(depthBuffer, ivec2(coords)).x);
 
-            if(depth <= storedDepth * 1.01){    // when depth is within 1% range of front-most point, add to anti-aliasing
+            if(depth <= storedDepth * (1 + depthPercTPAA)){    // when depth is within 1% range of front-most point, add to anti-aliasing
                 uint rgba = pointsRgba[k];
 
                 if((toggleFlags & 1) != 0){

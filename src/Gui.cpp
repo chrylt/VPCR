@@ -184,6 +184,16 @@ void RenderGui(const Config& config)
             ImGui::SetTooltip("Visualizes accumulation overflow prevention.");
         }
 
+        auto depthPerc = config.Get<float>("TPAA.depthPerc");
+        ImGui::Text("(TPAA) Depth Percentage");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Points chosen for accumulation have to be within the range of this depth percentage.");
+        }
+        if (ImGui::SliderFloat("##(TPAA) Depth Percentage for Accumulation", &depthPerc.value(), 0, 1, "%.5f",
+                               ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic)) {
+            config.SetDirty("TPAA.depthPerc", depthPerc.value());
+        }
+
         if (ImGui::TreeNodeEx("Density-Based Methods", ImGuiTreeNodeFlags_DefaultOpen)) {
             auto preventOverflow = config.Get<bool>("AA.preventOverflow");
             if (ImGui::Checkbox("Enable Overflow Prevention of Accumulation", &preventOverflow.value())) {
