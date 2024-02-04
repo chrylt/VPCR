@@ -43,7 +43,7 @@ void main()
             continue;
         }
 
-        if(counter + bucketCounter >= 255){
+        if(counter + bucketCounter >= 255 && (toggleFlags & 64) != 0){
             // potential overflow detected; stop iteration
             overflowDetected = true;
             continue;
@@ -63,23 +63,28 @@ void main()
 
     color = vec4(vec3(r, g, b) / (counter + 0.00001) / 255, 1);
 
-    if(counter >= 255){// || overflowDetected){
+    if(counter >= 255 && (toggleFlags & 32) != 0){
         color = vec4(1, 0, 1, 1);   //print magenta at overflow
+    }else if(overflowDetected && (toggleFlags & 128) != 0){
+        color = vec4(0, 1, 1, 1);   //print cyan at prevented overflow
+    }else if(overflowDetected && (toggleFlags & 32) != 0){
+
+        if(depthBuffer[pixelID].startIdx == -2)
+            color = vec4(0, 1, 0, 1);   //print green at insert timeout (outer loop)
+
+        if(depthBuffer[pixelID].startIdx == -3)
+            color = vec4(1, 0, 0, 1);   //print red at and of histogram reached and insert failed
+
+        if(depthBuffer[pixelID].startIdx == -4)
+            color = vec4(0, 0, 1, 1);   //print blue when bucketCount is at limit
+
+    }else if((toggleFlags & 256) != 0){
+
+        // visualize bucketIDs
+        const int startIdx = depthBuffer[pixelID].startIdx;
+        if(startIdx != -1){
+            const uint foremostBucketID = depthBuffer[pixelID].buckets[startIdx].bucketID; 
+            color = vec4(unpackUnorm4x8(wang_hash(foremostBucketID)).rgb, 1);
+        }
     }
-
-    if(depthBuffer[pixelID].startIdx == -2)
-        color = vec4(0, 1, 1, 1);   //print cyan at insert timeout (outer loop)
-
-    if(depthBuffer[pixelID].startIdx == -3)
-        color = vec4(1, 0, 0, 1);   //print red at and of histogram reached and insert failed
-
-    if(depthBuffer[pixelID].startIdx == -3)
-        color = vec4(0, 0, 1, 1);   //print blue when bucketCount is at limit
-
-    // visualize bucketIDs @Atzubi TODO: toggle
-    /*const int startIdx = depthBuffer[pixelID].startIdx;
-    if(startIdx != -1){
-        const uint foremostBucketID = depthBuffer[pixelID].buckets[startIdx].bucketID; 
-        color = vec4(unpackUnorm4x8(wang_hash(foremostBucketID)).rgb, 1);
-    }*/
 }

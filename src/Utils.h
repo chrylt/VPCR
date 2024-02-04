@@ -9,6 +9,16 @@ constexpr std::uint32_t ComputeLaneCount = 1024;
 
 constexpr auto MaxBatchSize = 8192;
 
+enum AntiAliasingMode : std::uint32_t {
+    Off = 0,
+    TwoPass = 1,
+    DensityOnePass = 2,
+    DensityTwoPass = 3,
+    AA_MODE_COUNT /* always keep this as the last element */
+};
+constexpr inline static char const *AntiAliasingModeStrings[AA_MODE_COUNT] = {"OFF", "TWO PASS", "DENSITY",
+                                                                              "DENSITY TWO PASS"};
+
 struct CompressedPosition {
     std::uint32_t x : 10;
     std::uint32_t y : 10;

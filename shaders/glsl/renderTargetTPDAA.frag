@@ -36,7 +36,7 @@ void main()
         if(prevCounter > bucketCounter)
             break;  // local maximum found
             
-        if(counter + bucketCounter >= 255){
+        if(counter + bucketCounter >= 255 && (toggleFlags & 64) != 0){
             // potential overflow detected; stop iteration
             overflowDetected = true;
             break;
@@ -52,9 +52,22 @@ void main()
         prevCounter = bucketCounter;
     }
 
+    // set final rendered color
     color = vec4(vec3(r, g, b) / (counter + 0.00001) / 255, 1);
 
-    if(counter >= 255){// || overflowDetected){
+    // debug visualizations
+
+    if(counter >= 255 && (toggleFlags & 32) != 0){
         color = vec4(1, 0, 1, 1);   //print magenta at overflow
+    } else if(overflowDetected && (toggleFlags & 128) != 0){
+        color = vec4(0, 1, 1, 1);   //print cyan at prevented overflow
+    }else if((toggleFlags & 256) != 0){
+        // visualize only the points in certain bucket
+        const uint64_t storedValue = histogram[pixelID].buckets[twoPassDensityBucketVis].acc; 
+        const float bucketCounter = float(storedValue & 0xFFFF);
+        const float bucketR = float((storedValue >> 48) & 0xFFFF);
+        const float bucketG = float((storedValue >> 32) & 0xFFFF);
+        const float bucketB = float((storedValue >> 16) & 0xFFFF);
+        color = vec4(vec3(bucketR, bucketG, bucketB) / (bucketCounter + 0.00001) / 255, 1);
     }
 }
