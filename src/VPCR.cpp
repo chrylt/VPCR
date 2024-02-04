@@ -176,8 +176,6 @@ VPCRImpl::VPCRImpl(Config config) : config_(std::move(config))
     config_.Set("TitleBar.fps", std::string("0"));
     config_.Set("TitleBar.DrawnBatches", std::string("0"));
     config_.Set("TitleBar.TotalBatches", std::string("0"));
-    config_.Set("TitleBar.AAMode", std::string("0"));
-    config_.Set("TitleBar.dedMode", std::string("0"));
 }
 
 void VPCRImpl::Run()
@@ -270,16 +268,13 @@ void VPCRImpl::OnUpdate(std::uint32_t frameIndex)
         }
     }
 
-    // Print FPS and statistics on window title
+    // Write statistics to config for GUI
     {
         if ((currentTime - lastTitleUpdate_).count() / 1000000000.f >= 1.f) {
             lastTitleUpdate_ = std::chrono::high_resolution_clock::now();
             config_.Set("TitleBar.fps", std::to_string(frameCounter_));
             config_.Set("TitleBar.DrawnBatches", std::to_string(statistics_->data.drawnBatches));
             config_.Set("TitleBar.TotalBatches", std::to_string(pointCloudAcceleration_->GetBatchCount()));
-            config_.Set("TitleBar.AAMode", std::string(AntiAliasingModeStrings[currAntiAliasingMode]));
-            config_.Set("TitleBar.dedMode",
-                        std::string(warpWideDedModeStrings[config_.Get<int>("LOD.warpWideDeduplication").value()]));
             frameCounter_ = 0;
         }
     }
