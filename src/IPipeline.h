@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+
 #include <tga/tga.hpp>
 #include <tga/tga_utils.hpp>
 #include <tga/tga_vulkan/tga_vulkan.hpp>
